@@ -59,18 +59,12 @@
     --widget-color: #262b38; --hover-color: #323848; --focus-color: #3b4254; --number-color: #ffc58a;
     --font-size: 12px; --name-width: 48%; z-index: 6; }
   @media (max-width: 720px) {
-    #hud { max-width: 220px; min-width: 0; font-size: 11.5px; }
+    #hud { top: auto; bottom: 10px; left: 10px; right: 10px; max-width: none; min-width: 0; font-size: 11.5px; padding: 8px 10px 6px; }
+    #hud .sub { display: none; }
+    #hud h1 { font-size: 13px; }
     #help { display: none; }
   }
 </style>
-<script type="importmap">
-{
-  "imports": {
-    "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
-    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
-  }
-}
-</script>
 </head>
 <body>
 
@@ -112,7 +106,7 @@
   <h3>2. 光线：零测地线方程（逐像素反向追踪）</h3>
   <p>由球对称性，每条光线位于过黑洞中心的平面内。令 u = 1/r，零测地线方程化为 Binet 形式：</p>
   <span class="eq">d²u/dφ² = −u + 3M u²</span>
-  <p>在 GPU 着色器中对每个像素用四阶 Runge–Kutta 积分（自适应步长 Δφ = Δφ₀·5/(1+12u)，光子球附近为 Δφ₀；与高精度参考解相比主像方向误差 ≲ 10⁻⁵ rad，远低于一个像素），
+  <p>在 GPU 着色器中对每个像素用四阶 Runge–Kutta 积分（自适应步长 Δφ = min(0.15, Δφ₀·5/(1+12u))，光子球附近为 Δφ₀；与高精度参考解相比主像方向误差 ≲ 10⁻⁵ rad，远低于一个像素），
     并用三次 Hermite 插值精确求出光线穿过赤道面（吸积盘）的位置与逃逸到无穷远的方向。
     任意阶的高阶像（盘的背面、光子环）都自然出现。r &lt; 3M 且向内运动的光线必定落入视界。</p>
   <p>相机是该点的局域静止观测者（或运动观测者），像素方向定义在其正交标架中；
@@ -143,18 +137,7 @@
     恒星按点源处理，像素足迹由光线方向的屏幕导数给出，因此透镜放大时通量守恒。</p>
 </div>
 
-<script>
-  // Fallback message if the ES modules cannot be fetched (e.g. offline).
-  setTimeout(function () {
-    if (!window.__bhReady) {
-      var e = document.getElementById('loaderErr');
-      e.style.display = 'block';
-      e.innerHTML = '仍在加载… 若长时间无响应，请确认网络可以访问 cdn.jsdelivr.net（用于加载 three.js），并使用支持 WebGL2 的现代浏览器（Chrome / Edge / Firefox / Safari 15+）。';
-    }
-  }, 15000);
-</script>
-
-<script type="module">
+<script type="text/x-module" id="bh-main">
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
@@ -182,7 +165,7 @@ const params = {
   lensing: true, doppler: true, gravShift: true, timeDelay: true, limb: true,
   diskOn: true, rin: 6, rout: 22, Tpeak: 4500, diskGain: 1.0, turb: 0.55, timeScale: 6, paused: false, grid: false,
   mwGain: 1.0, starGain: 1.0,
-  quality: '高 (High)', autoRes: true, step: 0.05, exposure: 0.45, bloom: 0.22, toneMap: 'ACES', critical: false,
+  quality: '高 (High)', autoRes: true, ringAA: true, step: 0.05, exposure: 0.45, bloom: 0.22, toneMap: 'ACES', critical: false,
 };
 const urlq = new URLSearchParams(location.search);
 for (const [k, v] of urlq) {
@@ -425,7 +408,7 @@ const rtUniforms = {
   uDiskGain: { value: 1 }, uTurb: { value: 0.5 }, uGrid: { value: 0 }, uLogYpeak: { value: 0 },
   uBB: { value: bbTex }, uBBN: { value: BB_N }, uLogT0: { value: Math.log(BB_T0) }, uLogT1: { value: Math.log(BB_T1) },
   uMW: { value: mwRT.texture }, uMWSize: { value: new THREE.Vector2(MW_W, MW_H) }, uGal: { value: galMatrix },
-  uMWGain: { value: 1 }, uStarGain: { value: 1 }, uLineNorm: { value: LINE_NORM }, uCritical: { value: 0 },
+  uMWGain: { value: 1 }, uStarGain: { value: 1 }, uLineNorm: { value: LINE_NORM }, uCritical: { value: 0 }, uAA: { value: 1 },
 };
 
 const rtMat = new THREE.RawShaderMaterial({
@@ -457,7 +440,7 @@ uniform float uBBN, uLogT0, uLogT1;
 uniform sampler2D uMW;
 uniform vec2 uMWSize;
 uniform mat3 uGal;
-uniform float uMWGain, uStarGain, uLineNorm, uCritical;
+uniform float uMWGain, uStarGain, uLineNorm, uCritical, uAA;
 
 #define PI  3.141592653589793
 #define TAU 6.283185307179586
@@ -662,11 +645,19 @@ float hermD(float p0, float m0, float p1, float m1, float t) {
   return (6.0 * t2 - 6.0 * t) * p0 + (3.0 * t2 - 4.0 * t + 1.0) * m0 + (-6.0 * t2 + 6.0 * t) * p1 + (3.0 * t2 - 2.0 * t) * m1;
 }
 
-void main() {
-  // ---- pixel direction in the observer's local orthonormal frame
-  vec2 sp = (vUv * 2.0 - 1.0) * vec2(uAspect, 1.0);
-  vec3 nObs = normalize(uCamFwd + uTanHalfFov * (sp.x * uCamRight + sp.y * uCamUp));
+struct Ray {
+  vec3 col;        // accumulated disk emission (premultiplied)
+  float trans;     // remaining transmittance toward the sky
+  int state;       // 0: unfinished, 1: escaped, 2: captured, 3: opaque
+  vec3 skyDir;     // asymptotic direction at infinity (if escaped)
+  float bImp;      // impact parameter
+  float gSky;      // frequency ratio for light arriving from infinity
+};
 
+// pixel direction in the observer's local orthonormal frame
+vec3 pixelDir(vec2 sp) { return normalize(uCamFwd + uTanHalfFov * (sp.x * uCamRight + sp.y * uCamUp)); }
+
+Ray traceRay(vec3 nObs) {
   // ---- aberration: observer moving with velocity beta relative to the local static observer
   vec3 n = nObs;
   float gObs = 1.0;
@@ -712,7 +703,7 @@ void main() {
   for (int i = 0; i < 4000; i++) {
     // adaptive step: far from the hole the equation is nearly harmonic (large steps are exact to ~1e-5 rad);
     // near the photon sphere (u -> 1/3) the step shrinks to uStep
-    float h = min(0.3, uStep * 5.0 / (1.0 + 12.0 * u));
+    float h = min(0.15, uStep * 5.0 / (1.0 + 12.0 * u));
     // RK4 step of the Binet equation
     vec2 s0 = vec2(u, up);
     vec2 k1 = vec2(s0.y, -s0.x + K * s0.x * s0.x);
@@ -769,25 +760,52 @@ void main() {
     if (phi > uPhiMax) { state = 2; break; }
   }
 
-  // ---- background sky along the asymptotic direction (derivatives taken in uniform control flow)
-  vec3 skyDir = state == 1 ? cos(phiEnd) * e1 + sin(phiEnd) * e2 : n;
-  vec3 dg = uGal * skyDir;
+  Ray R;
+  R.col = col; R.trans = trans; R.state = state; R.bImp = bImp;
+  R.skyDir = state == 1 ? cos(phiEnd) * e1 + sin(phiEnd) * e2 : n;
+  R.gSky = mix(1.0, gStatObs, uGravShift) * gKin;
+  return R;
+}
+
+vec3 skyColor(Ray R, vec3 dgx, vec3 dgy, float basePix) {
+  if (R.state != 1 || R.trans <= 1e-3) return vec3(0.0);
+  vec3 dg = uGal * R.skyDir;
+  vec3 sky = vec3(0.0);
+  if (uMWGain > 0.0) sky += uMWGain * milkyWay(dg, dgx, dgy, R.gSky);
+  if (uStarGain > 0.0) sky += uStarGain * starField(dg, dgx, dgy, R.gSky, asin(clamp(dg.z, -1.0, 1.0)), basePix);
+  return R.trans * sky;
+}
+
+void main() {
+  vec2 sp = (vUv * 2.0 - 1.0) * vec2(uAspect, 1.0);
+  float pixStep = 2.0 / uPixH;              // one pixel in sp units
   float basePix = 2.0 * uTanHalfFov / uPixH;
+  Ray R = traceRay(pixelDir(sp));
+
+  // ---- footprint of the pixel on the celestial sphere: screen-space derivatives of the lensed direction,
+  //      taken in uniform control flow (capped; near critical curves it is genuinely huge and the sky
+  //      correctly averages to its mean brightness)
+  vec3 dg = uGal * R.skyDir;
   vec3 dgx = dFdx(dg), dgy = dFdy(dg);
-  // footprint of the pixel on the celestial sphere (capped; near critical curves it is genuinely huge and the
-  // sky correctly averages to its mean brightness)
   dgx *= min(1.0, 0.3 / max(length(dgx), 1e-12));
   dgy *= min(1.0, 0.3 / max(length(dgy), 1e-12));
-  float db = fwidth(bImp);
-  if (state == 1 && trans > 1e-3) {
-    float gSky = mix(1.0, gStatObs, uGravShift) * gKin;
-    vec3 sky = vec3(0.0);
-    if (uMWGain > 0.0) sky += uMWGain * milkyWay(dg, dgx, dgy, gSky);
-    if (uStarGain > 0.0) sky += uStarGain * starField(dg, dgx, dgy, gSky, asin(clamp(dg.z, -1.0, 1.0)), basePix);
-    col += trans * sky;
+  float db = fwidth(R.bImp);
+
+  vec3 col = R.col + skyColor(R, dgx, dgy, basePix);
+
+  // ---- adaptive supersampling of the photon ring: higher-order images live at b → 3√3 M and are far
+  //      thinner than a pixel; trace 4 extra rotated-grid sub-pixel rays only there (~1–2 % of the screen)
+  float x = R.bImp - B_CRIT;
+  if (uAA > 0.5 && uLensing > 0.5 && x > -3.0 * db && x < 0.8) {
+    for (int k = 0; k < 4; k++) {
+      vec2 o = k == 0 ? vec2(0.125, 0.375) : k == 1 ? vec2(-0.375, 0.125) : k == 2 ? vec2(-0.125, -0.375) : vec2(0.375, -0.125);
+      Ray S = traceRay(pixelDir(sp + o * pixStep));
+      col += S.col + skyColor(S, 0.5 * dgx, 0.5 * dgy, basePix);
+    }
+    col *= 0.2;
   }
   if (uCritical > 0.5) {
-    float d = abs(bImp - B_CRIT) / max(db, 1e-6);
+    float d = abs(R.bImp - B_CRIT) / max(db, 1e-6);
     col += vec3(0.25, 0.75, 1.0) * 0.8 * (1.0 - smoothstep(0.6, 1.6, d));
   }
   outColor = vec4(col, 1.0);
@@ -870,6 +888,7 @@ fSky.add(params, 'mwGain', 0, 6, 0.01).name('银河亮度');
 fSky.add(params, 'starGain', 0, 6, 0.01).name('恒星亮度');
 const fRen = gui.addFolder('渲染');
 fRen.add(params, 'quality', Object.keys(QUALITY)).name('画质').onChange((v) => { params.step = QUALITY[v].step; resScale = 1; applySize(); });
+fRen.add(params, 'ringAA').name('光子环自适应超采样');
 fRen.add(params, 'autoRes').name('自适应分辨率').onChange((v) => { if (!v) { resScale = 1; applySize(); } });
 fRen.add(params, 'step', 0.01, 0.12, 0.005).name('积分步长 Δφ (rad)').listen();
 fRen.add(params, 'exposure', 0.05, 6, 0.01).name('曝光');
@@ -963,8 +982,10 @@ function updateUniforms(obs) {
   U.uCamUp.value.set(e[4], e[5], e[6]);
   U.uCamFwd.value.set(-e[8], -e[9], -e[10]);
   U.uCamPos.value.copy(camera.position);
-  U.uTanHalfFov.value = Math.tan(params.fov * Math.PI / 360);
-  U.uAspect.value = innerWidth / innerHeight;
+  // params.fov is the vertical FOV in landscape; in portrait the vertical FOV widens so the horizontal view stays usable
+  const aspect = innerWidth / innerHeight;
+  U.uTanHalfFov.value = Math.tan(params.fov * Math.PI / 360) * Math.max(1, 1.15 / aspect);
+  U.uAspect.value = aspect;
   renderer.getDrawingBufferSize(dbuf);
   U.uPixH.value = dbuf.y;
   U.uBeta.value.copy(obs.beta);
@@ -986,6 +1007,7 @@ function updateUniforms(obs) {
   U.uMWGain.value = params.mwGain;
   U.uStarGain.value = params.starGain;
   U.uCritical.value = params.critical ? 1 : 0;
+  U.uAA.value = params.ringAA ? 1 : 0;
   renderer.toneMapping = TONEMAPS[params.toneMap];
   renderer.toneMappingExposure = params.exposure;
   bloom.strength = params.bloom;
@@ -1083,6 +1105,60 @@ function frame(now) {
     console.error(err);
     fail('初始化失败：' + (err && err.message ? err.message : err));
   }
+})();
+</script>
+<script>
+// ---------------------------------------------------------------------------------------------
+// Loader: pick a reachable CDN for three.js (jsDelivr first, then mirrors), install the import map,
+// then start the main module. Works when the file is opened directly (file://) — no server needed.
+// ---------------------------------------------------------------------------------------------
+(function () {
+  var V = '0.169.0';
+  var PRIMARY = 'https://cdn.jsdelivr.net/npm/three@' + V + '/';
+  var MIRRORS = [
+    'https://unpkg.com/three@' + V + '/',
+    'https://fastly.jsdelivr.net/npm/three@' + V + '/',
+    'https://gcore.jsdelivr.net/npm/three@' + V + '/',
+    'https://registry.npmmirror.com/three/' + V + '/files/',
+  ];
+  var msg = document.getElementById('loaderMsg');
+  function probe(base, ms) {
+    return new Promise(function (resolve, reject) {
+      var ctl = window.AbortController ? new AbortController() : null;
+      var timer = setTimeout(function () { if (ctl) ctl.abort(); reject(new Error('timeout')); }, ms);
+      fetch(base + 'build/three.module.min.js', { method: 'HEAD', mode: 'cors', signal: ctl ? ctl.signal : undefined })
+        .then(function (r) { clearTimeout(timer); if (r.ok) resolve(base); else reject(new Error('HTTP ' + r.status)); })
+        .catch(function (e) { clearTimeout(timer); reject(e); });
+    });
+  }
+  function any(list, ms) {   // first mirror that answers
+    return new Promise(function (resolve, reject) {
+      var left = list.length;
+      list.forEach(function (b) { probe(b, ms).then(resolve, function () { if (--left === 0) reject(new Error('all failed')); }); });
+    });
+  }
+  function start(base) {
+    window.__bhCdn = base;
+    var im = document.createElement('script');
+    im.type = 'importmap';
+    im.textContent = JSON.stringify({ imports: { 'three': base + 'build/three.module.min.js', 'three/addons/': base + 'examples/jsm/' } });
+    document.head.appendChild(im);
+    var m = document.createElement('script');
+    m.type = 'module';
+    m.textContent = document.getElementById('bh-main').textContent;
+    document.body.appendChild(m);
+  }
+  probe(PRIMARY, 3500).then(start, function () {
+    if (msg) msg.textContent = '正在尝试备用 CDN …';
+    any(MIRRORS, 9000).then(start, function () { start(PRIMARY); });
+  });
+  setTimeout(function () {
+    if (!window.__bhReady) {
+      var e = document.getElementById('loaderErr');
+      e.style.display = 'block';
+      e.innerHTML = '仍在加载… 若长时间无响应，请确认网络可以访问 three.js 的 CDN（jsDelivr / unpkg / npmmirror），并使用支持 WebGL2 的现代浏览器（Chrome / Edge / Firefox / Safari 16.4+）。';
+    }
+  }, 20000);
 })();
 </script>
 </body>
