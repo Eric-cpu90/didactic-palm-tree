@@ -1,0 +1,1089 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Schwarzschild 黑洞 · 广义相对论光线追踪</title>
+<style>
+  :root {
+    --panel: rgba(8, 10, 16, 0.72);
+    --line: rgba(255, 255, 255, 0.10);
+    --text: #dfe6f2;
+    --dim: #8e9ab0;
+    --accent: #ffb86b;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; color: var(--text);
+    font: 13px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
+  canvas { display: block; width: 100vw; height: 100vh; touch-action: none; }
+
+  #loader { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: #000; z-index: 20; transition: opacity .8s ease; }
+  #loader.hide { opacity: 0; pointer-events: none; }
+  #loader .ring { width: 74px; height: 74px; border-radius: 50%; background: #000;
+    box-shadow: 0 0 0 3px #000, 0 0 18px 6px rgba(255,170,90,.55), 0 0 60px 18px rgba(255,120,40,.18); margin-bottom: 26px;
+    animation: pulse 2.4s ease-in-out infinite; }
+  @keyframes pulse { 50% { box-shadow: 0 0 0 3px #000, 0 0 24px 9px rgba(255,190,120,.75), 0 0 80px 26px rgba(255,120,40,.25); } }
+  #loader .msg { color: var(--dim); letter-spacing: .04em; }
+  #loader .bar { width: 220px; height: 2px; background: #222; margin-top: 12px; overflow: hidden; border-radius: 2px; }
+  #loader .bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .15s; }
+  #loader .err { color: #ff8a80; max-width: 520px; text-align: center; margin-top: 14px; display: none; }
+
+  .panel { position: fixed; background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); z-index: 5; }
+  #hud { left: 14px; top: 14px; padding: 12px 14px 10px; min-width: 250px; max-width: 320px; }
+  #hud h1 { font-size: 15px; margin: 0 0 2px; font-weight: 600; letter-spacing: .02em; }
+  #hud .sub { color: var(--dim); font-size: 11.5px; margin-bottom: 8px; }
+  #hud table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+  #hud td { padding: 1px 0; vertical-align: top; }
+  #hud td:first-child { color: var(--dim); padding-right: 10px; white-space: nowrap; }
+  #hud td:last-child { text-align: right; }
+  #hud .warn { color: #ffcf7a; font-size: 11.5px; margin-top: 6px; display: none; }
+
+  #help { left: 14px; bottom: 14px; padding: 8px 12px; color: var(--dim); font-size: 12px; }
+  #help b { color: var(--text); font-weight: 500; }
+  #help a { color: var(--accent); cursor: pointer; text-decoration: none; }
+
+  #physics { left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(760px, calc(100vw - 32px));
+    max-height: calc(100vh - 60px); overflow: auto; padding: 18px 22px; display: none; z-index: 10;
+    background: rgba(6, 8, 13, 0.93); }
+  #physics h2 { margin: 0 0 10px; font-size: 17px; }
+  #physics h3 { margin: 16px 0 4px; font-size: 14px; color: var(--accent); font-weight: 600; }
+  #physics p, #physics li { color: #c4ccda; margin: 4px 0; }
+  #physics code, #physics .eq { font-family: "STIX Two Math", "Cambria Math", "Times New Roman", serif; font-size: 14.5px; color: #fff; }
+  #physics .eq { display: block; text-align: center; margin: 6px 0; }
+  #physics .close { position: absolute; right: 14px; top: 10px; cursor: pointer; color: var(--dim); font-size: 20px; }
+
+  body.noui .panel, body.noui .lil-gui { display: none !important; }
+  .lil-gui.root { --background-color: rgba(8,10,16,.82); --title-background-color: rgba(20,24,34,.95);
+    --widget-color: #262b38; --hover-color: #323848; --focus-color: #3b4254; --number-color: #ffc58a;
+    --font-size: 12px; --name-width: 48%; z-index: 6; }
+  @media (max-width: 720px) {
+    #hud { max-width: 220px; min-width: 0; font-size: 11.5px; }
+    #help { display: none; }
+  }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+
+<div id="loader">
+  <div class="ring"></div>
+  <div class="msg" id="loaderMsg">正在加载 three.js …</div>
+  <div class="bar"><i id="loaderBar"></i></div>
+  <div class="err" id="loaderErr"></div>
+</div>
+
+<div id="hud" class="panel">
+  <h1>Schwarzschild 黑洞</h1>
+  <div class="sub">零测地线光线追踪 · Novikov–Thorne 吸积盘 · 单位 G = c = M = 1</div>
+  <table>
+    <tr><td>观察者半径 r</td><td id="hR">–</td></tr>
+    <tr><td>观察者状态</td><td id="hObs">–</td></tr>
+    <tr><td>阴影角直径</td><td id="hShadow">–</td></tr>
+    <tr><td>时间膨胀 dτ/dt</td><td id="hDil">–</td></tr>
+    <tr><td>无穷远光蓝移 g</td><td id="hG">–</td></tr>
+    <tr><td>坐标时 t</td><td id="hT">–</td></tr>
+    <tr><td>渲染</td><td id="hPerf">–</td></tr>
+  </table>
+  <div class="warn" id="hWarn"></div>
+</div>
+
+<div id="help" class="panel">
+  <b>左键拖动</b> 旋转 · <b>滚轮 / 双指</b> 缩放 · <b>H</b> 隐藏界面 · <b>空格</b> 暂停 · <b>R</b> 重置 ·
+  <a id="physLink">物理模型说明</a>
+</div>
+
+<div id="physics" class="panel">
+  <span class="close" id="physClose">×</span>
+  <h2>物理模型（全部由公式实时计算）</h2>
+
+  <h3>1. 时空：Schwarzschild 度规</h3>
+  <span class="eq">ds² = −(1 − 2M/r) dt² + (1 − 2M/r)⁻¹ dr² + r² (dθ² + sin²θ dφ²)</span>
+  <p>事件视界 r = 2M，光子球 r = 3M，最内稳定圆轨道 ISCO r = 6M。</p>
+
+  <h3>2. 光线：零测地线方程（逐像素反向追踪）</h3>
+  <p>由球对称性，每条光线位于过黑洞中心的平面内。令 u = 1/r，零测地线方程化为 Binet 形式：</p>
+  <span class="eq">d²u/dφ² = −u + 3M u²</span>
+  <p>在 GPU 着色器中对每个像素用四阶 Runge–Kutta 积分（自适应步长 Δφ = Δφ₀·5/(1+12u)，光子球附近为 Δφ₀；与高精度参考解相比主像方向误差 ≲ 10⁻⁵ rad，远低于一个像素），
+    并用三次 Hermite 插值精确求出光线穿过赤道面（吸积盘）的位置与逃逸到无穷远的方向。
+    任意阶的高阶像（盘的背面、光子环）都自然出现。r &lt; 3M 且向内运动的光线必定落入视界。</p>
+  <p>相机是该点的局域静止观测者（或运动观测者），像素方向定义在其正交标架中；
+    径向分量按 √(1 − 2M/r) 换算到坐标空间，冲击参数 <code>b = r sinψ / √(1 − 2M/r)</code>。</p>
+
+  <h3>3. 观测者运动与光行差</h3>
+  <p>可选静止悬停、开普勒圆轨道（v = √(M/(r − 2M))）或从无穷远自由下落（v = √(2M/r)）。
+    像素方向经狭义相对论光行差变换到静止标架：
+    <code>n = n′ + [(γ − 1)(n′·β)/β² − γ] β</code>，频率因子 <code>1 / [γ(1 − β·n′)]</code>。</p>
+
+  <h3>4. 吸积盘：Novikov–Thorne / Page–Thorne 薄盘</h3>
+  <p>盘内气体在赤道面做开普勒圆周运动，Ω = √(M/r³)，u<sup>t</sup> = 1/√(1 − 3M/r)。
+    内边缘零力矩，辐射通量（x = √r，x₀ = √r<sub>in</sub>）：</p>
+  <span class="eq">F(r) ∝ [ x − x₀ + (√3/2) ln( (x+√3)(x₀−√3) / ((x₀+√3)(x−√3)) ) ] / ( r^{5/2} (r − 3M) )</span>
+  <p>局域为黑体，T(r) ∝ F(r)<sup>1/4</sup>，峰值约在 r ≈ 9.55M；湍流结构按局域开普勒角速度差动旋转。</p>
+
+  <h3>5. 红移、多普勒与相对论集束</h3>
+  <span class="eq">g = ν<sub>obs</sub>/ν<sub>em</sub> = √(1 − 3M/r) / [ √(1 − 2M/r<sub>obs</sub>) · (1 − Ω L<sub>z</sub>/E) ]</span>
+  <p>其中 L<sub>z</sub>/E 由每条光线的守恒量直接得到。由于 I<sub>ν</sub>/ν³ 是洛伦兹不变量，
+    温度为 T 的黑体在观测者看来正好是温度为 gT 的黑体——因此颜色与亮度（相对论集束）都由 Planck 定律精确给出。
+    颜色通过 Planck 谱与 CIE 1931 色匹配函数积分得到，再转换到线性 sRGB。
+    可选 Chandrasekhar 电子散射临边昏暗 I(μ) ∝ 1 + 2.06μ（μ 在气体共动系中计算）。</p>
+
+  <h3>6. 光行时延与背景星空</h3>
+  <p>沿光线积分 dt/dφ = 1 / [b u² (1 − 2Mu)] 得到坐标时延，盘面图案取发射时刻的状态。
+    背景为程序化银河（老年/年轻星族黑体谱 + Hα/Hβ/[OIII] 发射线 + 尘埃消光）与约 50 万颗恒星；
+    来自无穷远的光对静止观测者有蓝移 g = 1/√(1 − 2M/r)，颜色同样按 Planck 谱/谱线波长精确移动。
+    恒星按点源处理，像素足迹由光线方向的屏幕导数给出，因此透镜放大时通量守恒。</p>
+</div>
+
+<script>
+  // Fallback message if the ES modules cannot be fetched (e.g. offline).
+  setTimeout(function () {
+    if (!window.__bhReady) {
+      var e = document.getElementById('loaderErr');
+      e.style.display = 'block';
+      e.innerHTML = '仍在加载… 若长时间无响应，请确认网络可以访问 cdn.jsdelivr.net（用于加载 three.js），并使用支持 WebGL2 的现代浏览器（Chrome / Edge / Firefox / Safari 15+）。';
+    }
+  }, 15000);
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import GUI from 'three/addons/libs/lil-gui.module.min.js';
+
+window.__bhReady = true;
+const $ = (id) => document.getElementById(id);
+const setLoader = (msg, frac) => { $('loaderMsg').textContent = msg; if (frac != null) $('loaderBar').style.width = (frac * 100).toFixed(1) + '%'; };
+const fail = (msg) => { $('loaderErr').style.display = 'block'; $('loaderErr').textContent = msg; };
+
+// =====================================================================================
+//  Parameters
+// =====================================================================================
+const QUALITY = {
+  '流畅 (Performance)': { maxPR: 0.75, step: 0.08 },
+  '均衡 (Balanced)':    { maxPR: 1.0,  step: 0.06 },
+  '高 (High)':          { maxPR: 1.5,  step: 0.05 },
+  '极致 (Ultra / SSAA)': { maxPR: 2.5, step: 0.03 },
+};
+const params = {
+  observer: 'static', followOrbit: true, fov: 55, autoRotate: false,
+  lensing: true, doppler: true, gravShift: true, timeDelay: true, limb: true,
+  diskOn: true, rin: 6, rout: 22, Tpeak: 4500, diskGain: 1.0, turb: 0.55, timeScale: 6, paused: false, grid: false,
+  mwGain: 1.0, starGain: 1.0,
+  quality: '高 (High)', autoRes: true, step: 0.05, exposure: 0.45, bloom: 0.22, toneMap: 'ACES', critical: false,
+};
+const urlq = new URLSearchParams(location.search);
+for (const [k, v] of urlq) {
+  if (!(k in params)) continue;
+  const t = typeof params[k];
+  params[k] = t === 'number' ? parseFloat(v) : t === 'boolean' ? (v === '1' || v === 'true') : v;
+}
+const DEFAULT_CAM = { r: 30, polar: 82.5 * Math.PI / 180, azim: 0 };
+if (urlq.has('noui')) document.body.classList.add('noui');
+
+// =====================================================================================
+//  Renderer / camera / controls
+// =====================================================================================
+let renderer;
+try {
+  renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance', preserveDrawingBuffer: urlq.has('capture') });
+} catch (e) {
+  fail('无法创建 WebGL2 上下文。请使用支持 WebGL2 的浏览器并开启硬件加速。');
+  throw e;
+}
+if (!renderer.capabilities.isWebGL2) { fail('此浏览器不支持 WebGL2。'); throw new Error('WebGL2 required'); }
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+document.body.appendChild(renderer.domElement);
+
+const camera = new THREE.PerspectiveCamera(params.fov, innerWidth / innerHeight, 0.1, 2000);
+const setCamSpherical = (r, polar, azim) => camera.position.set(r * Math.sin(polar) * Math.sin(azim), r * Math.cos(polar), r * Math.sin(polar) * Math.cos(azim));
+setCamSpherical(urlq.has('r') ? parseFloat(urlq.get('r')) : DEFAULT_CAM.r,
+                urlq.has('incl') ? parseFloat(urlq.get('incl')) * Math.PI / 180 : DEFAULT_CAM.polar,
+                urlq.has('azim') ? parseFloat(urlq.get('azim')) * Math.PI / 180 : DEFAULT_CAM.azim);
+camera.lookAt(0, 0, 0);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 0, 0);
+controls.enableDamping = true;
+controls.dampingFactor = 0.06;
+controls.enablePan = false;
+controls.minDistance = 2.25;      // static observers require r > 2M; keep a margin above the horizon
+controls.maxDistance = 400;
+controls.zoomSpeed = 0.9;
+controls.rotateSpeed = 0.55;
+controls.minPolarAngle = 0.002;
+controls.maxPolarAngle = Math.PI - 0.002;
+controls.autoRotateSpeed = 0.35;
+
+// =====================================================================================
+//  Physics helpers on the CPU side (LUTs, normalisations)
+// =====================================================================================
+// CIE 1931 2° colour matching functions — multi-lobe Gaussian fit (Wyman, Sloan & Shirley 2013)
+function cie(l) {
+  const g = (x, m, s1, s2) => { const t = (x - m) / (x < m ? s1 : s2); return Math.exp(-0.5 * t * t); };
+  return [
+    1.056 * g(l, 599.8, 37.9, 31.0) + 0.362 * g(l, 442.0, 16.0, 26.7) - 0.065 * g(l, 501.1, 20.4, 26.2),
+    0.821 * g(l, 568.8, 46.9, 40.5) + 0.286 * g(l, 530.9, 16.3, 31.1),
+    1.217 * g(l, 437.0, 11.8, 36.0) + 0.681 * g(l, 459.0, 26.0, 13.8),
+  ];
+}
+const xyz2rgb = ([X, Y, Z]) => [
+   3.2404542 * X - 1.5371385 * Y - 0.4985314 * Z,
+  -0.9692660 * X + 1.8760108 * Y + 0.0415560 * Z,
+   0.0556434 * X - 0.2040259 * Y + 1.0572252 * Z,
+];
+const CMF = []; for (let l = 360; l <= 830; l += 1) CMF.push([l, cie(l)]);
+// Planck spectral radiance B_λ(T) integrated against the CMFs (arbitrary but consistent units)
+function planckXYZ(T) {
+  let X = 0, Y = 0, Z = 0;
+  for (const [l, c] of CMF) {
+    const lu = l * 1e-3; // µm
+    const B = 1 / (lu ** 5 * (Math.exp(14387.769 / (lu * T)) - 1));
+    X += B * c[0]; Y += B * c[1]; Z += B * c[2];
+  }
+  return [X, Y, Z];
+}
+const Y_REF = planckXYZ(6500)[1];
+const logY = (T) => Math.log2(planckXYZ(T)[1] / Y_REF);
+
+// LUT: rgb = linear-sRGB chromaticity normalised to unit luminance, a = log2(Y(T)/Y(6500 K))
+const BB_N = 1024, BB_T0 = 300, BB_T1 = 400000;
+const bbTex = (() => {
+  const data = new Float32Array(BB_N * 4);
+  for (let i = 0; i < BB_N; i++) {
+    const T = Math.exp(Math.log(BB_T0) + (Math.log(BB_T1) - Math.log(BB_T0)) * i / (BB_N - 1));
+    const xyz = planckXYZ(T);
+    const rgb = xyz2rgb(xyz).map((v) => Math.max(v, 0));
+    const lum = 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
+    data[i * 4 + 0] = rgb[0] / lum; data[i * 4 + 1] = rgb[1] / lum; data[i * 4 + 2] = rgb[2] / lum;
+    data[i * 4 + 3] = Math.log2(xyz[1] / Y_REF);
+  }
+  const t = new THREE.DataTexture(data, BB_N, 1, THREE.RGBAFormat, THREE.FloatType);
+  t.minFilter = t.magFilter = THREE.NearestFilter;
+  t.needsUpdate = true;
+  return t;
+})();
+// Emission-line normalisation (Hα : Hβ : [OIII] energy ratio 1 : 0.35 : 0.30), so that unit value = unit luminance at rest
+const LINE_NORM = 1.0 * cie(656.28)[1] + 0.35 * cie(486.13)[1] + 0.30 * cie(500.68)[1];
+
+// Page–Thorne flux for a Schwarzschild thin disk with zero-torque inner edge at rin (M = 1)
+function ntFlux(r, rin) {
+  if (r <= rin) return 0;
+  const x = Math.sqrt(r), x0 = Math.sqrt(rin), s3 = Math.sqrt(3);
+  const br = x - x0 + 0.5 * s3 * Math.log((x + s3) * (x0 - s3) / ((x0 + s3) * (x - s3)));
+  return Math.max(br, 0) / (r * r * x * (r - 3));
+}
+function ntFluxMax(rin) { let m = 0; for (let r = rin; r < rin * 8; r += 0.005) m = Math.max(m, ntFlux(r, rin)); return m; }
+
+// Galactic frame (rows: toward galactic centre, l = 90°, north galactic pole), expressed in world coordinates
+const galMatrix = (() => {
+  const gc = new THREE.Vector3(-0.80, 0.30, -0.52).normalize();
+  const up = new THREE.Vector3(0.55, 0.83, 0.05);
+  const ngp = up.sub(gc.clone().multiplyScalar(up.dot(gc))).normalize();
+  const yg = new THREE.Vector3().crossVectors(ngp, gc).normalize();
+  return new THREE.Matrix3().set(gc.x, gc.y, gc.z, yg.x, yg.y, yg.z, ngp.x, ngp.y, ngp.z);
+})();
+
+// =====================================================================================
+//  GLSL: shared noise
+// =====================================================================================
+const GLSL_NOISE = /* glsl */`
+vec3 hash33(vec3 p3) {
+  p3 = fract(p3 * vec3(0.1031, 0.1030, 0.0973));
+  p3 += dot(p3, p3.yxz + 33.33);
+  return fract((p3.xxy + p3.yxx) * p3.zyx) * 2.0 - 1.0;
+}
+float gnoise(vec3 p) {
+  vec3 i = floor(p), f = fract(p);
+  vec3 w = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
+  float n000 = dot(hash33(i), f);
+  float n100 = dot(hash33(i + vec3(1,0,0)), f - vec3(1,0,0));
+  float n010 = dot(hash33(i + vec3(0,1,0)), f - vec3(0,1,0));
+  float n110 = dot(hash33(i + vec3(1,1,0)), f - vec3(1,1,0));
+  float n001 = dot(hash33(i + vec3(0,0,1)), f - vec3(0,0,1));
+  float n101 = dot(hash33(i + vec3(1,0,1)), f - vec3(1,0,1));
+  float n011 = dot(hash33(i + vec3(0,1,1)), f - vec3(0,1,1));
+  float n111 = dot(hash33(i + vec3(1,1,1)), f - vec3(1,1,1));
+  return mix(mix(mix(n000, n100, w.x), mix(n010, n110, w.x), w.y),
+             mix(mix(n001, n101, w.x), mix(n011, n111, w.x), w.y), w.z);
+}
+`;
+
+// =====================================================================================
+//  Milky Way bake (equirectangular map in galactic coordinates; channels:
+//  R = old stellar population (≈4600 K), G = young population (≈11000 K), B = nebular line emission)
+// =====================================================================================
+const MW_W = renderer.capabilities.maxTextureSize >= 8192 && !urlq.has('lowsky') ? 4096 : 2048;
+const MW_H = MW_W / 2;
+const mwRT = new THREE.WebGLRenderTarget(MW_W, MW_H, {
+  type: THREE.HalfFloatType, format: THREE.RGBAFormat, depthBuffer: false, stencilBuffer: false,
+  generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter,
+  wrapS: THREE.RepeatWrapping, wrapT: THREE.ClampToEdgeWrapping,
+});
+mwRT.texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+const bakeMat = new THREE.RawShaderMaterial({
+  glslVersion: THREE.GLSL3,
+  uniforms: { uSize: { value: new THREE.Vector2(MW_W, MW_H) }, uY0: { value: -1 }, uY1: { value: 1 } },
+  vertexShader: /* glsl */`
+    in vec3 position;
+    uniform float uY0, uY1;
+    void main() { gl_Position = vec4(position.x, mix(uY0, uY1, position.y * 0.5 + 0.5), 0.0, 1.0); }`,
+  fragmentShader: /* glsl */`
+    precision highp float;
+    out vec4 outColor;
+    uniform vec2 uSize;
+    #define PI 3.141592653589793
+    #define TAU 6.283185307179586
+    ${GLSL_NOISE}
+    float fbm(vec3 p, int oct) {
+      float a = 0.5, s = 0.0, n = 0.0;
+      for (int i = 0; i < 8; i++) { if (i >= oct) break; s += a * gnoise(p); n += a; p = p * 2.03 + vec3(1.3, 7.1, 4.7); a *= 0.5; }
+      return s / n;
+    }
+    vec3 lbDir(float l, float b) { return vec3(cos(b) * cos(l), cos(b) * sin(l), sin(b)); }
+    // elliptical galaxy / dwarf galaxy profile on the sky
+    float galaxy(vec3 p, float l, float b, float a, float q, float pa, float core) {
+      vec3 c = lbDir(l, b);
+      vec3 e1 = normalize(cross(vec3(0.0, 0.0, 1.0), c));
+      vec3 e2 = cross(c, e1);
+      vec2 xy = vec2(dot(p, e1), dot(p, e2));
+      if (dot(p, c) < 0.0) return 0.0;
+      float cs = cos(pa), sn = sin(pa);
+      xy = vec2(cs * xy.x + sn * xy.y, -sn * xy.x + cs * xy.y);
+      float rr = length(vec2(xy.x / a, xy.y / (a * q)));
+      return exp(-rr * 3.0) + core * exp(-rr * rr * 120.0);
+    }
+    void main() {
+      vec2 uv = gl_FragCoord.xy / uSize;
+      float l = (uv.x - 0.5) * TAU, b = (uv.y - 0.5) * PI;
+      vec3 p = lbDir(l, b);
+      float ab = abs(b);
+      float lc = exp(-l * l / (2.0 * 1.1 * 1.1));              // brighter toward the Galactic centre
+      float warp = 0.012 * sin(l * 1.3 + 0.8) + 0.010 * fbm(vec3(l * 2.0, 1.7, 0.3), 3);
+      float bw = b - warp, abw = abs(bw);
+      // ---- old population: thin exponential disk + boxy bulge, broken into star clouds ----
+      float hgt = 0.050 + 0.050 * lc;
+      float diskP = exp(-pow(abw / hgt, 1.15)) * (0.62 + 0.38 * lc) * (0.75 + 0.5 * fbm(vec3(l * 1.1, 4.2, 2.0), 4));
+      float bul = exp(-0.5 * (l * l / (0.19 * 0.19) + bw * bw / (0.12 * 0.12)));
+      float c1 = fbm(p * 4.0, 6), c2 = fbm(p * 13.0 + 3.0, 6), c3 = fbm(p * 40.0 + 7.0, 5);
+      float clouds = pow(clamp(0.75 + 1.5 * c1, 0.03, 2.4), 2.0) * (0.55 + 0.9 * clamp(0.5 + 1.6 * c2, 0.0, 1.6)) * (0.8 + 0.5 * c3);
+      float oldPop = 1.25 * diskP * clouds + 1.0 * bul * (0.8 + 0.5 * clamp(0.5 + c2, 0.0, 1.5)) + 0.02 * exp(-ab / 0.45);
+      // ---- young population: very thin, clumpy, bluish ----
+      float y1 = fbm(p * 9.0 + 11.0, 6), y2 = fbm(p * 30.0 + 2.0, 4);
+      float youngPop = exp(-abw / 0.028) * pow(clamp(0.45 + 1.4 * y1, 0.0, 1.8), 3.0) * (0.8 + 0.5 * y2) * (0.55 + 0.45 * lc) * 0.45;
+      // ---- HII regions (Hα / Hβ / [OIII] line emission) ----
+      float hn = fbm(p * 22.0 + 2.0, 5);
+      float ha = exp(-abw / 0.03) * pow(max(hn + 0.06, 0.0) * 2.4, 3.0) * 0.28 * (0.5 + 0.5 * lc);
+      // ---- dust: a patchy central rift plus filamentary dark clouds spread around the plane ----
+      float dN = fbm(p * 5.0 + 21.0, 6), dF = fbm(p * 18.0 + 5.0, 5), dG = fbm(p * 55.0 + 9.0, 4);
+      float riftW = 0.016 + 0.014 * lc + 0.010 * (dN + 0.5);
+      float rift = exp(-pow(abs(bw - 0.006 * sin(3.0 * l)) / riftW, 1.6));
+      float patchy = smoothstep(-0.15, 0.30, dN + 0.55 * dF + 0.2 * dG);
+      float ridge = 1.0 - abs(2.0 * fbm(p * 8.0 + 31.0, 6)); ridge = ridge * ridge * ridge;
+      float tau = 3.0 * rift * patchy * (0.45 + 0.55 * lc)
+                + 1.6 * exp(-abw / 0.06) * ridge * smoothstep(-0.1, 0.4, dF + 0.4 * dG)
+                + 0.5 * exp(-abw / 0.15) * smoothstep(0.0, 0.5, dN + 0.3 * dF);
+      oldPop *= exp(-tau);
+      youngPop *= exp(-1.6 * tau);
+      ha *= exp(-1.1 * tau);
+      // ---- Magellanic Clouds and an Andromeda-like spiral (real galactic coordinates) ----
+      float gn = 0.7 + 0.6 * fbm(p * 40.0 + 9.0, 4);
+      float lmc = galaxy(p, radians(280.5), radians(-32.9), 0.075, 0.55, 0.4, 0.0) * gn;
+      float smc = galaxy(p, radians(302.8), radians(-44.3), 0.035, 0.6, -0.3, 0.0) * gn;
+      float m31 = galaxy(p, radians(121.2), radians(-21.6), 0.030, 0.30, 0.65, 3.0);
+      oldPop += 0.10 * lmc + 0.05 * smc + 0.06 * m31;
+      youngPop += 0.06 * lmc + 0.03 * smc;
+      ha += 0.02 * lmc * max(fbm(p * 80.0, 3) + 0.1, 0.0) * 4.0;
+      outColor = vec4(oldPop, youngPop, ha, 1.0);
+    }`,
+  depthTest: false, depthWrite: false,
+});
+
+// =====================================================================================
+//  Main ray-tracing shader
+// =====================================================================================
+const rtUniforms = {
+  uAspect: { value: 1 }, uTanHalfFov: { value: 1 }, uPixH: { value: 1080 },
+  uCamPos: { value: new THREE.Vector3() }, uCamRight: { value: new THREE.Vector3() },
+  uCamUp: { value: new THREE.Vector3() }, uCamFwd: { value: new THREE.Vector3() },
+  uBeta: { value: new THREE.Vector3() }, uGamma: { value: 1 },
+  uLensing: { value: 1 }, uDoppler: { value: 1 }, uGravShift: { value: 1 }, uTimeDelay: { value: 1 }, uLimb: { value: 1 },
+  uTime: { value: 0 }, uStep: { value: 0.05 }, uPhiMax: { value: 8 * Math.PI },
+  uDiskOn: { value: 1 }, uRin: { value: 6 }, uRout: { value: 22 }, uTpeak: { value: 7000 }, uFmaxInv: { value: 1 },
+  uDiskGain: { value: 1 }, uTurb: { value: 0.5 }, uGrid: { value: 0 }, uLogYpeak: { value: 0 },
+  uBB: { value: bbTex }, uBBN: { value: BB_N }, uLogT0: { value: Math.log(BB_T0) }, uLogT1: { value: Math.log(BB_T1) },
+  uMW: { value: mwRT.texture }, uMWSize: { value: new THREE.Vector2(MW_W, MW_H) }, uGal: { value: galMatrix },
+  uMWGain: { value: 1 }, uStarGain: { value: 1 }, uLineNorm: { value: LINE_NORM }, uCritical: { value: 0 },
+};
+
+const rtMat = new THREE.RawShaderMaterial({
+  glslVersion: THREE.GLSL3,
+  uniforms: rtUniforms,
+  depthTest: false, depthWrite: false,
+  vertexShader: /* glsl */`
+    in vec3 position;
+    in vec2 uv;
+    out vec2 vUv;
+    void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`,
+  fragmentShader: /* glsl */`
+precision highp float;
+precision highp int;
+precision highp sampler2D;
+
+in vec2 vUv;
+out vec4 outColor;
+
+uniform float uAspect, uTanHalfFov, uPixH;
+uniform vec3 uCamPos, uCamRight, uCamUp, uCamFwd;
+uniform vec3 uBeta;
+uniform float uGamma;
+uniform float uLensing, uDoppler, uGravShift, uTimeDelay, uLimb;
+uniform float uTime, uStep, uPhiMax;
+uniform float uDiskOn, uRin, uRout, uTpeak, uFmaxInv, uDiskGain, uTurb, uGrid, uLogYpeak;
+uniform sampler2D uBB;
+uniform float uBBN, uLogT0, uLogT1;
+uniform sampler2D uMW;
+uniform vec2 uMWSize;
+uniform mat3 uGal;
+uniform float uMWGain, uStarGain, uLineNorm, uCritical;
+
+#define PI  3.141592653589793
+#define TAU 6.283185307179586
+#define B_CRIT 5.196152422706632   /* 3*sqrt(3) M : critical impact parameter (photon sphere) */
+
+${GLSL_NOISE}
+
+// ---------------------------------------------------------------- blackbody (Planck ⊗ CIE 1931 LUT)
+vec4 bbLookup(float T) {
+  float x = clamp((log(T) - uLogT0) / (uLogT1 - uLogT0) * (uBBN - 1.0), 0.0, uBBN - 1.001);
+  float i0 = floor(x);
+  vec4 a = texelFetch(uBB, ivec2(int(i0), 0), 0);
+  vec4 b = texelFetch(uBB, ivec2(int(i0) + 1, 0), 0);
+  return mix(a, b, x - i0);
+}
+// absolute radiance of a blackbody at temperature T (unit: luminance of a 6500 K blackbody)
+vec3 bbRadiance(float T) { vec4 c = bbLookup(T); return c.rgb * exp2(c.a); }
+// a blackbody source of unit luminance and rest temperature T, seen with frequency ratio g  (I_nu/nu^3 invariant)
+vec3 bbShifted(float T, float g) {
+  vec4 c0 = bbLookup(T), c1 = bbLookup(T * g);
+  return c1.rgb * exp2(c1.a - c0.a);
+}
+// CIE 1931 CMF (analytic fit) for shifting emission lines exactly
+float gpw(float x, float m, float s1, float s2) { float t = (x - m) / (x < m ? s1 : s2); return exp(-0.5 * t * t); }
+vec3 cmf(float l) {
+  return vec3(1.056 * gpw(l, 599.8, 37.9, 31.0) + 0.362 * gpw(l, 442.0, 16.0, 26.7) - 0.065 * gpw(l, 501.1, 20.4, 26.2),
+              0.821 * gpw(l, 568.8, 46.9, 40.5) + 0.286 * gpw(l, 530.9, 16.3, 31.1),
+              1.217 * gpw(l, 437.0, 11.8, 36.0) + 0.681 * gpw(l, 459.0, 26.0, 13.8));
+}
+const mat3 XYZ2RGB = mat3(3.2404542, -0.9692660, 0.0556434, -1.5371385, 1.8760108, -0.2040259, -0.4985314, 0.0415560, 1.0572252);
+vec3 nebulaLines(float g) {
+  vec3 c = 1.00 * max(XYZ2RGB * cmf(656.28 / g), 0.0)
+         + 0.35 * max(XYZ2RGB * cmf(486.13 / g), 0.0)
+         + 0.30 * max(XYZ2RGB * cmf(500.68 / g), 0.0);
+  float g2 = g * g;
+  return c * (g2 * g2) / uLineNorm;      // integrated line intensity scales as g^4
+}
+
+// ---------------------------------------------------------------- background sky
+uint pcg(uint v) {
+  uint s = v * 747796405u + 2891336453u;
+  uint w = ((s >> ((s >> 28u) + 4u)) ^ s) * 277803737u;
+  return (w >> 22u) ^ w;
+}
+float rnd(inout uint s) { s = pcg(s); return float(s) * 2.3283064365386963e-10; }
+float starTemp(float r) {
+  if (r < 0.10) return mix(3000.0, 3700.0, r / 0.10);
+  if (r < 0.40) return mix(3700.0, 5200.0, (r - 0.10) / 0.30);
+  if (r < 0.65) return mix(5200.0, 6000.0, (r - 0.40) / 0.25);
+  if (r < 0.82) return mix(6000.0, 7500.0, (r - 0.65) / 0.17);
+  if (r < 0.94) return mix(7500.0, 10000.0, (r - 0.82) / 0.12);
+  float q = (r - 0.94) / 0.06;
+  return mix(10000.0, 30000.0, q * q);
+}
+// Point-like stars on an equal-angle cube grid, 5 layers following N(>F) ∝ F^-3/2.
+// Every star is a true point source: its sky offset from the pixel centre is mapped back to screen space
+// through the Jacobian of the lensing map (screen-space derivatives of the asymptotic ray direction), and it is
+// drawn with a sub-pixel PSF whose flux is divided by the pixel's solid angle on the sky.  Lensed stars therefore
+// stay point-like while their brightness follows the gravitational magnification |det J|^-1 exactly.
+vec3 starField(vec3 d, vec3 dx, vec3 dy, float g, float galLat, float basePix) {
+  vec3 ad = abs(d); vec3 q, qx, qy; uint face;
+  if (ad.x >= ad.y && ad.x >= ad.z) { q = d; qx = dx; qy = dy; face = d.x > 0.0 ? 0u : 1u; }
+  else if (ad.y >= ad.z) { q = d.yzx; qx = dx.yzx; qy = dy.yzx; face = d.y > 0.0 ? 2u : 3u; }
+  else { q = d.zxy; qx = dx.zxy; qy = dy.zxy; face = d.z > 0.0 ? 4u : 5u; }
+  float sg = sign(q.x);
+  vec2 w = atan(q.yz / abs(q.x)) * (4.0 / PI);
+  // SVD of the 3x2 lensing Jacobian J = [qx qy] (pixel -> sky).  Singular values are clamped from below so the
+  // pseudo-inverse stays finite on critical curves (caps the magnification) without shrinking screen offsets.
+  float gxx = dot(qx, qx), gyy = dot(qy, qy), gxy = dot(qx, qy);
+  float tr = 0.5 * (gxx + gyy), dd = sqrt(max(0.25 * (gxx - gyy) * (gxx - gyy) + gxy * gxy, 0.0));
+  float l1 = tr + dd, l2 = max(tr - dd, 0.0);
+  vec2 v1 = abs(gxy) > 1e-30 ? normalize(vec2(gxy, l1 - gxx)) : (gxx >= gyy ? vec2(1.0, 0.0) : vec2(0.0, 1.0));
+  float eps = 0.025 * basePix;
+  float sv1 = max(sqrt(l1), eps), sv2 = max(sqrt(l2), eps);
+  vec3 u1 = qx * v1.x + qy * v1.y;
+  u1 = dot(u1, u1) > 1e-30 ? normalize(u1) : normalize(cross(q, vec3(0.0, 0.0, 1.0) + 0.1));
+  vec3 u2 = normalize(cross(q, u1));
+  float area = sv1 * sv2;                       // solid angle per pixel (sr)
+  float reach = 4.0 * sv1;                      // sky radius that can contribute (≈ 4 px)
+  const float SIGPX = 0.55;                     // PSF sigma in pixels
+  const float KFLUX = 3.0e-7;                   // flux unit (radiance x sr)
+  float dens = 0.28 + 0.72 * exp(-abs(galLat) / 0.30);
+  vec3 meanCol = bbShifted(5400.0, g);
+  vec3 acc = vec3(0.0), accMean = vec3(0.0);
+  float N = 22.0, F = 1.0;
+  for (int L = 0; L < 5; L++) {
+    // once a pixel's sky footprint approaches the cell size the layer is unresolved: use its exact mean radiance
+    // (stars/sr x <flux>, with <U^-2/3> = 2.748 for U clipped at 2e-3) — this keeps the photon-ring region correct
+    float wr = 1.0 - smoothstep(0.2, 0.45, sv1 * N / (0.5 * PI));
+    accMean += (1.0 - wr) * F * 2.748 * (6.0 * N * N * dens / (4.0 * PI)) * meanCol;
+    if (wr > 0.0) {
+      vec3 layer = vec3(0.0);
+      vec2 gp = (w * 0.5 + 0.5) * N;
+      vec2 c0 = floor(gp);
+      vec2 fr = gp - c0;
+      vec2 o = vec2(fr.x < 0.5 ? -1.0 : 1.0, fr.y < 0.5 ? -1.0 : 1.0);
+      for (int k = 0; k < 4; k++) {
+        vec2 c = c0 + vec2(float(k & 1), float(k >> 1)) * o;
+        if (c.x < 0.0 || c.y < 0.0 || c.x >= N || c.y >= N) continue;
+        uint s = pcg(uint(c.x) + pcg(uint(c.y) + pcg(face + 16u * uint(L) + 977u)));
+        if (rnd(s) > dens) continue;
+        float px = rnd(s), py = rnd(s);
+        vec2 sp = (c + 0.1 + 0.8 * vec2(px, py)) / N * 2.0 - 1.0;
+        vec3 dv = normalize(vec3(sg, tan(sp * (PI * 0.25)))) - q;
+        if (dot(dv, dv) > reach * reach) continue;
+        // screen-space offset (pixels): s = V Σ^-1 Uᵀ dv
+        float a1 = dot(u1, dv) / sv1, a2 = dot(u2, dv) / sv2;
+        float r2 = a1 * a1 + a2 * a2;
+        if (r2 > 16.0) continue;
+        float fl = F * pow(max(rnd(s), 2e-3), -0.6667);
+        float T = starTemp(rnd(s));
+        layer += fl * exp(-0.5 * r2 / (SIGPX * SIGPX)) * bbShifted(T, g);
+      }
+      acc += wr * layer;
+    }
+    N *= 2.0; F *= 0.397;
+  }
+  return KFLUX * (acc / (TAU * SIGPX * SIGPX * area) + accMean);
+}
+// diffuse Milky Way from the baked galactic-coordinate map, anisotropically filtered with analytic uv gradients
+vec3 milkyWay(vec3 dg, vec3 dx, vec3 dy, float g) {
+  float lon = atan(dg.y, dg.x), lat = asin(clamp(dg.z, -1.0, 1.0));
+  vec2 uv = vec2(lon / TAU + 0.5, lat / PI + 0.5);
+  float rho2 = max(dg.x * dg.x + dg.y * dg.y, 1e-6), cz = sqrt(rho2);
+  vec2 gx = vec2((dg.x * dx.y - dg.y * dx.x) / (rho2 * TAU), dx.z / (cz * PI));
+  vec2 gy = vec2((dg.x * dy.y - dg.y * dy.x) / (rho2 * TAU), dy.z / (cz * PI));
+  vec4 m = textureGrad(uMW, uv, gx, gy);
+  return 0.2 * (m.r * bbShifted(4600.0, g) + m.g * bbShifted(11000.0, g) + m.b * nebulaLines(g));
+}
+
+// ---------------------------------------------------------------- accretion disk
+// Page–Thorne flux for a Schwarzschild thin disk (zero torque at uRin), arbitrary normalisation
+float ntFlux(float r) {
+  float x = sqrt(r), x0 = sqrt(uRin);
+  const float S3 = 1.7320508075688772;
+  float br = x - x0 + 0.5 * S3 * log((x + S3) * (x0 - S3) / ((x0 + S3) * (x - S3)));
+  return max(br, 0.0) / (r * r * x * (r - 3.0));
+}
+float fbm5(vec3 p) {
+  float a = 0.5, s = 0.0;
+  for (int i = 0; i < 5; i++) { s += a * gnoise(p); p = p * 2.07 + vec3(1.7, 9.2, 3.1); a *= 0.5; }
+  return s;
+}
+// MRI-like turbulence advected with the local Keplerian angular velocity. Two staggered layers are
+// cross-faded so that differential rotation shears the pattern only by a bounded amount.
+float turbulence(float r, float az, float t) {
+  float Om = pow(r, -1.5);
+  const float P = 140.0;
+  float lr = log(r), acc = 0.0, w2 = 0.0;
+  for (int i = 0; i < 2; i++) {
+    float tau = t / P + 0.5 * float(i);
+    float cyc = floor(tau), fr = tau - cyc;
+    float w = 1.0 - abs(2.0 * fr - 1.0);
+    float psi = az - Om * fr * P;                       // co-rotating azimuth
+    float sd = mod(cyc, 61.0) + 17.0 * float(i);
+    vec3 q = vec3(2.3 * cos(psi), 2.3 * sin(psi), 13.0 * lr) + vec3(sd * 5.31, sd * 2.77, sd * 3.13);
+    acc += w * fbm5(q);
+    w2 += w * w;
+  }
+  float n = acc / sqrt(max(w2, 1e-4));
+  return exp(uTurb * 2.6 * n);
+}
+// emission of the disk element hit at radius rc; returns premultiplied rgb + opacity
+vec4 diskEmission(float rc, float phiC, vec3 e1, vec3 e2, float bImp, float Ly,
+                  float gKin, float gStatObs, float tEm) {
+  vec3 pos = rc * (cos(phiC) * e1 + sin(phiC) * e2);
+  float az = atan(-pos.z, pos.x);                     // azimuth along the direction of rotation (+y axis)
+  float F = ntFlux(rc) * uFmaxInv;
+  if (uTurb > 0.0) F *= turbulence(rc, az, tEm);
+  float Tem = uTpeak * pow(max(F, 1e-12), 0.25);
+  // redshift: emitter on circular geodesic, photon with conserved L_y/E
+  float Om = pow(rc, -1.5);
+  float den = 1.0 - Om * Ly;
+  float gDop = sqrt(1.0 - 3.0 / rc) / (sqrt(1.0 - 2.0 / rc) * den);   // kinematic (SR Doppler w.r.t. static frame)
+  float gGrav = sqrt(1.0 - 2.0 / rc) * gStatObs;                        // gravitational
+  float g = mix(1.0, gDop, uDoppler) * mix(1.0, gGrav, uGravShift) * gKin;
+  vec3 rad = bbRadiance(g * Tem) * exp2(-uLogYpeak) * uDiskGain;
+  if (uLimb > 0.5) {
+    vec3 et = -sin(phiC) * e1 + cos(phiC) * e2;
+    float mu = clamp((bImp / rc) * abs(et.y) * sqrt(1.0 - 3.0 / rc) / den, 0.0, 1.0);  // cos(emission angle), comoving frame
+    rad *= (1.0 + 2.06 * mu) / 2.3733;
+  }
+  if (uGrid > 0.5) {
+    float dr = abs(rc - 2.0 * floor(rc * 0.5 + 0.5));
+    float da = abs(fract(az / (PI / 12.0) + 0.5) - 0.5) * (PI / 12.0) * rc;
+    float wl = 0.02 + 0.0025 * rc;
+    float line = max(1.0 - smoothstep(wl, 2.0 * wl, dr), 1.0 - smoothstep(wl, 2.0 * wl, da));
+    float isco = 1.0 - smoothstep(0.06, 0.14, abs(rc - uRin));
+    rad += vec3(0.15, 0.55, 1.0) * 0.35 * line + vec3(1.0, 0.3, 0.2) * 1.2 * isco;
+  }
+  float alpha = 1.0 - smoothstep(uRout * 0.80, uRout, rc);    // optically thick, soft outer rim
+  return vec4(rad * alpha, alpha);
+}
+
+// ---------------------------------------------------------------- helpers
+float herm(float p0, float m0, float p1, float m1, float t) {
+  float t2 = t * t, t3 = t2 * t;
+  return (2.0 * t3 - 3.0 * t2 + 1.0) * p0 + (t3 - 2.0 * t2 + t) * m0 + (-2.0 * t3 + 3.0 * t2) * p1 + (t3 - t2) * m1;
+}
+float hermD(float p0, float m0, float p1, float m1, float t) {
+  float t2 = t * t;
+  return (6.0 * t2 - 6.0 * t) * p0 + (3.0 * t2 - 4.0 * t + 1.0) * m0 + (-6.0 * t2 + 6.0 * t) * p1 + (3.0 * t2 - 2.0 * t) * m1;
+}
+
+void main() {
+  // ---- pixel direction in the observer's local orthonormal frame
+  vec2 sp = (vUv * 2.0 - 1.0) * vec2(uAspect, 1.0);
+  vec3 nObs = normalize(uCamFwd + uTanHalfFov * (sp.x * uCamRight + sp.y * uCamUp));
+
+  // ---- aberration: observer moving with velocity beta relative to the local static observer
+  vec3 n = nObs;
+  float gObs = 1.0;
+  float bb2 = dot(uBeta, uBeta);
+  if (bb2 > 1e-12) {
+    float bn = dot(uBeta, nObs);
+    n = normalize(nObs + ((uGamma - 1.0) * bn / bb2 - uGamma) * uBeta);
+    gObs = 1.0 / (uGamma * (1.0 - bn));
+  }
+  float gKin = mix(1.0, gObs, uDoppler);
+
+  // ---- initial data for the null geodesic (traced backwards from the camera)
+  float r0 = length(uCamPos);
+  vec3 e1 = uCamPos / r0;                   // radial unit vector: phi = 0 in the orbital plane
+  float nr = dot(n, e1);
+  vec3 nt = n - nr * e1;
+  float ntl = length(nt);
+  vec3 e2 = ntl > 1e-6 ? nt / ntl : normalize(cross(e1, abs(e1.y) < 0.9 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0)));
+  ntl = max(ntl, 1e-6);
+  float rs = 2.0 * uLensing;                // Schwarzschild radius entering the geodesic equation
+  float K = 1.5 * rs;                       // u'' = -u + 3M u^2
+  float a0 = sqrt(max(1.0 - rs / r0, 1e-6));
+  float bImp = r0 * ntl / a0;               // impact parameter b = L/E
+  float u = 1.0 / r0;
+  float up = -u * nr * a0 / ntl;            // du/dphi
+  vec3 Lhat = -cross(e1, e2);               // photon angular momentum direction (photon travels toward camera)
+  float Ly = bImp * Lhat.y;                 // L_z/E about the disk axis
+  float gStatObs = 1.0 / sqrt(1.0 - 2.0 / r0);   // static observer: blueshift of photons from infinity
+  float invB = 1.0 / max(bImp, 1e-5);
+
+  // ---- disk plane (y = 0) crossings occur at fixed angles phi_c + k*pi in the orbital plane
+  float A = e1.y, B = e2.y;
+  float phiC = 1e9;
+  if (uDiskOn > 0.5 && abs(A) + abs(B) > 1e-6) {
+    phiC = mod(atan(-A, B), PI);
+    if (phiC < 1e-4) phiC += PI;
+  }
+
+  vec3 col = vec3(0.0);
+  float trans = 1.0;
+  float phi = 0.0, tDel = 0.0, phiEnd = 0.0;
+  int state = 0;                            // 0: unfinished, 1: escaped, 2: captured, 3: opaque
+  for (int i = 0; i < 4000; i++) {
+    // adaptive step: far from the hole the equation is nearly harmonic (large steps are exact to ~1e-5 rad);
+    // near the photon sphere (u -> 1/3) the step shrinks to uStep
+    float h = min(0.3, uStep * 5.0 / (1.0 + 12.0 * u));
+    // RK4 step of the Binet equation
+    vec2 s0 = vec2(u, up);
+    vec2 k1 = vec2(s0.y, -s0.x + K * s0.x * s0.x);
+    vec2 st = s0 + 0.5 * h * k1;
+    vec2 k2 = vec2(st.y, -st.x + K * st.x * st.x);
+    st = s0 + 0.5 * h * k2;
+    vec2 k3 = vec2(st.y, -st.x + K * st.x * st.x);
+    st = s0 + h * k3;
+    vec2 k4 = vec2(st.y, -st.x + K * st.x * st.x);
+    vec2 s1 = s0 + (h / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4);
+    float m0 = s0.y * h, m1 = s1.y * h;
+
+    // equatorial-plane crossing inside this step?
+    if (phiC <= phi + h) {
+      float t = (phiC - phi) / h;
+      float uc = herm(s0.x, m0, s1.x, m1, t);
+      if (uc > 0.0) {
+        float rc = 1.0 / uc;
+        if (rc > uRin && rc < uRout) {
+          float tHit = tDel;
+          if (uTimeDelay > 0.5) {
+            float um = herm(s0.x, m0, s1.x, m1, 0.5 * t);
+            tHit += (t * h / 6.0) * invB * (1.0 / (s0.x * s0.x * max(1.0 - rs * s0.x, 0.02))
+                    + 4.0 / (um * um * max(1.0 - rs * um, 0.02)) + 1.0 / (uc * uc * max(1.0 - rs * uc, 0.02)));
+          }
+          vec4 em = diskEmission(rc, phiC, e1, e2, bImp, Ly, gKin, gStatObs, uTime - tHit);
+          col += trans * em.rgb;
+          trans *= 1.0 - em.a;
+          if (trans < 1e-3) { state = 3; break; }
+        }
+      }
+      phiC += PI;
+    }
+    // escape to infinity: root of the Hermite interpolant
+    if (s1.x <= 0.0) {
+      float t = s0.x / (s0.x - s1.x);
+      for (int k = 0; k < 3; k++) {
+        float d = hermD(s0.x, m0, s1.x, m1, t);
+        if (abs(d) > 1e-8) t -= herm(s0.x, m0, s1.x, m1, t) / d;
+        t = clamp(t, 0.0, 1.0);
+      }
+      phiEnd = phi + t * h;
+      state = 1;
+      break;
+    }
+    // capture: crossed the horizon, or inside the photon sphere moving inward
+    if (s1.x >= 0.5 || (rs > 0.0 && s1.x > 0.33334 && s1.y > 0.0)) { state = 2; break; }
+    if (uTimeDelay > 0.5) {
+      float um = herm(s0.x, m0, s1.x, m1, 0.5);
+      tDel += (h / 6.0) * invB * (1.0 / (s0.x * s0.x * max(1.0 - rs * s0.x, 0.02))
+              + 4.0 / (um * um * max(1.0 - rs * um, 0.02)) + 1.0 / (s1.x * s1.x * max(1.0 - rs * s1.x, 0.02)));
+    }
+    phi += h; u = s1.x; up = s1.y;
+    if (phi > uPhiMax) { state = 2; break; }
+  }
+
+  // ---- background sky along the asymptotic direction (derivatives taken in uniform control flow)
+  vec3 skyDir = state == 1 ? cos(phiEnd) * e1 + sin(phiEnd) * e2 : n;
+  vec3 dg = uGal * skyDir;
+  float basePix = 2.0 * uTanHalfFov / uPixH;
+  vec3 dgx = dFdx(dg), dgy = dFdy(dg);
+  // footprint of the pixel on the celestial sphere (capped; near critical curves it is genuinely huge and the
+  // sky correctly averages to its mean brightness)
+  dgx *= min(1.0, 0.3 / max(length(dgx), 1e-12));
+  dgy *= min(1.0, 0.3 / max(length(dgy), 1e-12));
+  float db = fwidth(bImp);
+  if (state == 1 && trans > 1e-3) {
+    float gSky = mix(1.0, gStatObs, uGravShift) * gKin;
+    vec3 sky = vec3(0.0);
+    if (uMWGain > 0.0) sky += uMWGain * milkyWay(dg, dgx, dgy, gSky);
+    if (uStarGain > 0.0) sky += uStarGain * starField(dg, dgx, dgy, gSky, asin(clamp(dg.z, -1.0, 1.0)), basePix);
+    col += trans * sky;
+  }
+  if (uCritical > 0.5) {
+    float d = abs(bImp - B_CRIT) / max(db, 1e-6);
+    col += vec3(0.25, 0.75, 1.0) * 0.8 * (1.0 - smoothstep(0.6, 1.6, d));
+  }
+  outColor = vec4(col, 1.0);
+}`,
+});
+
+const scene = new THREE.Scene();
+const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), rtMat);
+quad.frustumCulled = false;
+scene.add(quad);
+
+// =====================================================================================
+//  Post-processing: HDR -> bloom (camera/eye PSF) -> tone mapping -> sRGB
+// =====================================================================================
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), params.bloom, 0.55, 0.0);
+composer.addPass(bloom);
+composer.addPass(new OutputPass());
+
+const TONEMAPS = { ACES: THREE.ACESFilmicToneMapping, AgX: THREE.AgXToneMapping, Neutral: THREE.NeutralToneMapping };
+
+// =====================================================================================
+//  Resolution management
+// =====================================================================================
+const DPR = Math.min(window.devicePixelRatio || 1, 2);
+let resScale = urlq.has('scale') ? parseFloat(urlq.get('scale')) : 1.0;
+let curPR = 0;
+function targetPR() {
+  const q = QUALITY[params.quality] || QUALITY['高 (High)'];
+  return Math.max(0.25, Math.min(q.maxPR, DPR * (q.maxPR > 2 ? 2 : 1)) * resScale);
+}
+function applySize(force) {
+  const w = innerWidth, h = innerHeight;
+  const pr = Math.round(targetPR() * 20) / 20;
+  if (!force && pr === curPR) return;
+  curPR = pr;
+  renderer.setPixelRatio(pr);
+  renderer.setSize(w, h);
+  composer.setPixelRatio(pr);
+  composer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+addEventListener('resize', () => applySize(true));
+
+// =====================================================================================
+//  GUI
+// =====================================================================================
+const actions = {
+  reset() { setCamSpherical(DEFAULT_CAM.r, DEFAULT_CAM.polar, DEFAULT_CAM.azim); controls.target.set(0, 0, 0); controls.update(); },
+  screenshot() { pendingShot = true; },
+};
+let pendingShot = false;
+const gui = new GUI({ title: '控制面板' });
+const fObs = gui.addFolder('观察者');
+fObs.add(params, 'observer', { '静止悬停 (static)': 'static', '开普勒圆轨道 (orbit)': 'orbit', '自由下落 (radial infall)': 'infall' }).name('运动状态');
+fObs.add(params, 'followOrbit').name('圆轨道时随之公转');
+fObs.add(params, 'fov', 15, 120, 1).name('视场角 FOV (°)');
+fObs.add(params, 'autoRotate').name('自动旋转视角');
+fObs.add(actions, 'reset').name('重置视角');
+const fPhys = gui.addFolder('物理效应');
+fPhys.add(params, 'lensing').name('引力透镜 (测地线)');
+fPhys.add(params, 'doppler').name('多普勒 / 相对论集束');
+fPhys.add(params, 'gravShift').name('引力红移 / 蓝移');
+fPhys.add(params, 'timeDelay').name('光行时延');
+fPhys.add(params, 'limb').name('临边昏暗 (电子散射)');
+const fDisk = gui.addFolder('吸积盘 (Novikov–Thorne)');
+fDisk.add(params, 'diskOn').name('显示吸积盘');
+fDisk.add(params, 'rin', 6, 20, 0.1).name('内边缘 r_in (M)').onChange(updateFmax);
+fDisk.add(params, 'rout', 8, 80, 0.5).name('外边缘 r_out (M)');
+fDisk.add(params, 'Tpeak', 1500, 40000, 100).name('峰值温度 T (K)').onChange(updateFmax);
+fDisk.add(params, 'diskGain', 0, 6, 0.01).name('盘亮度');
+fDisk.add(params, 'turb', 0, 1, 0.01).name('湍流结构');
+fDisk.add(params, 'timeScale', 0, 60, 0.1).name('时间流速 (M / 秒)');
+fDisk.add(params, 'paused').name('暂停').listen();
+fDisk.add(params, 'grid').name('坐标网格 (Δr = 2M)');
+const fSky = gui.addFolder('星空背景');
+fSky.add(params, 'mwGain', 0, 6, 0.01).name('银河亮度');
+fSky.add(params, 'starGain', 0, 6, 0.01).name('恒星亮度');
+const fRen = gui.addFolder('渲染');
+fRen.add(params, 'quality', Object.keys(QUALITY)).name('画质').onChange((v) => { params.step = QUALITY[v].step; resScale = 1; applySize(); });
+fRen.add(params, 'autoRes').name('自适应分辨率').onChange((v) => { if (!v) { resScale = 1; applySize(); } });
+fRen.add(params, 'step', 0.01, 0.12, 0.005).name('积分步长 Δφ (rad)').listen();
+fRen.add(params, 'exposure', 0.05, 6, 0.01).name('曝光');
+fRen.add(params, 'bloom', 0, 2, 0.01).name('辉光 (镜头 PSF)');
+fRen.add(params, 'toneMap', Object.keys(TONEMAPS)).name('色调映射');
+fRen.add(params, 'critical').name('临界曲线 b = 3√3 M');
+fRen.add(actions, 'screenshot').name('保存截图');
+if (innerWidth < 720) gui.close();
+fObs.close(); fSky.close(); fRen.close();
+
+function updateFmax() {
+  params.rin = Math.max(6, params.rin);
+  rtUniforms.uFmaxInv.value = 1 / ntFluxMax(params.rin);
+  rtUniforms.uLogYpeak.value = logY(params.Tpeak);
+}
+updateFmax();
+
+// =====================================================================================
+//  Keyboard
+// =====================================================================================
+addEventListener('keydown', (e) => {
+  if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT')) return;
+  if (e.code === 'KeyH') document.body.classList.toggle('noui');
+  else if (e.code === 'Space') { params.paused = !params.paused; e.preventDefault(); }
+  else if (e.code === 'KeyR') actions.reset();
+  else if (e.code === 'KeyC') { params.critical = !params.critical; gui.controllersRecursive().forEach((c) => c.updateDisplay()); }
+});
+$('physLink').onclick = () => { $('physics').style.display = 'block'; };
+$('physClose').onclick = () => { $('physics').style.display = 'none'; };
+
+// =====================================================================================
+//  Observer kinematics
+// =====================================================================================
+const Y_AXIS = new THREE.Vector3(0, 1, 0);
+const tmpV = new THREE.Vector3();
+function observerState() {
+  const pos = camera.position;
+  const r = pos.length();
+  const rhat = pos.clone().divideScalar(r);
+  const beta = new THREE.Vector3();
+  let mode = params.observer, warn = '';
+  if (mode === 'orbit') {
+    if (r <= 3.02) { mode = 'static'; warn = 'r ≤ 3M 处不存在圆轨道（光子球以内），已按静止观察者渲染。'; }
+    else {
+      tmpV.crossVectors(Y_AXIS, rhat);
+      if (tmpV.lengthSq() < 1e-6) tmpV.set(1, 0, 0);
+      beta.copy(tmpV.normalize()).multiplyScalar(Math.sqrt(1 / (r - 2)));   // v = sqrt(M/(r-2M)) w.r.t. static frame
+      if (r < 6) warn = 'r < 6M：圆轨道不稳定（ISCO 以内）。';
+    }
+  } else if (mode === 'infall') {
+    beta.copy(rhat).multiplyScalar(-Math.sqrt(2 / r));                    // v = sqrt(2M/r), inward
+  }
+  const gamma = 1 / Math.sqrt(1 - beta.lengthSq());
+  return { r, beta, gamma, mode, warn };
+}
+
+// =====================================================================================
+//  Milky-Way bake (in strips, spread over frames) then start the render loop
+// =====================================================================================
+async function bakeSky() {
+  const bakeScene = new THREE.Scene();
+  const bakeQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), bakeMat);
+  bakeQuad.frustumCulled = false;
+  bakeScene.add(bakeQuad);
+  const oc = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+  const strips = 16;
+  for (let i = 0; i < strips; i++) {
+    bakeMat.uniforms.uY0.value = -1 + 2 * i / strips;
+    bakeMat.uniforms.uY1.value = -1 + 2 * (i + 1) / strips;
+    renderer.setRenderTarget(mwRT);
+    renderer.autoClear = false;
+    renderer.render(bakeScene, oc);
+    renderer.setRenderTarget(null);
+    renderer.autoClear = true;
+    setLoader(`正在生成银河背景 (${MW_W}×${MW_H}) …`, (i + 1) / strips);
+    await new Promise((r) => requestAnimationFrame(r));
+  }
+  bakeQuad.geometry.dispose();
+}
+
+const clock = new THREE.Clock();
+let simTime = 0, frames = 0, fpsAccum = 0, fps = 0, lastHud = 0, lastResAdjust = 0, holdUntil = 0;
+const frameTimes = [];
+const dbuf = new THREE.Vector2();
+
+function updateUniforms(obs) {
+  const U = rtUniforms;
+  camera.updateMatrixWorld();
+  const e = camera.matrixWorld.elements;
+  U.uCamRight.value.set(e[0], e[1], e[2]);
+  U.uCamUp.value.set(e[4], e[5], e[6]);
+  U.uCamFwd.value.set(-e[8], -e[9], -e[10]);
+  U.uCamPos.value.copy(camera.position);
+  U.uTanHalfFov.value = Math.tan(params.fov * Math.PI / 360);
+  U.uAspect.value = innerWidth / innerHeight;
+  renderer.getDrawingBufferSize(dbuf);
+  U.uPixH.value = dbuf.y;
+  U.uBeta.value.copy(obs.beta);
+  U.uGamma.value = obs.gamma;
+  U.uLensing.value = params.lensing ? 1 : 0;
+  U.uDoppler.value = params.doppler ? 1 : 0;
+  U.uGravShift.value = params.gravShift ? 1 : 0;
+  U.uTimeDelay.value = params.timeDelay ? 1 : 0;
+  U.uLimb.value = params.limb ? 1 : 0;
+  U.uTime.value = simTime;
+  U.uStep.value = params.step;
+  U.uDiskOn.value = params.diskOn ? 1 : 0;
+  U.uRin.value = params.rin;
+  U.uRout.value = Math.max(params.rout, params.rin + 0.5);
+  U.uTpeak.value = params.Tpeak;
+  U.uDiskGain.value = params.diskGain;
+  U.uTurb.value = params.turb;
+  U.uGrid.value = params.grid ? 1 : 0;
+  U.uMWGain.value = params.mwGain;
+  U.uStarGain.value = params.starGain;
+  U.uCritical.value = params.critical ? 1 : 0;
+  renderer.toneMapping = TONEMAPS[params.toneMap];
+  renderer.toneMappingExposure = params.exposure;
+  bloom.strength = params.bloom;
+  bloom.enabled = params.bloom > 0.001;
+}
+
+function shadowAngularDiameter(r) {
+  // static observer: sin(alpha) = 3*sqrt(3) M sqrt(1 - 2M/r) / r ; alpha > 90° inside the photon sphere
+  const s = Math.min(1, 3 * Math.sqrt(3) * Math.sqrt(1 - 2 / r) / r);
+  const a = Math.asin(s);
+  return 2 * (r < 3 ? Math.PI - a : a) * 180 / Math.PI;
+}
+
+function updateHud(obs) {
+  const r = obs.r;
+  $('hR').textContent = `${r.toFixed(2)} M  (${(r / 2).toFixed(2)} r_s)`;
+  const names = { static: '静止悬停', orbit: '开普勒圆轨道', infall: '自由下落' };
+  const b = obs.beta.length();
+  $('hObs').textContent = names[obs.mode] + (b > 0 ? `  v = ${b.toFixed(3)} c` : '');
+  $('hShadow').textContent = obs.mode === 'static' && params.lensing ? `${shadowAngularDiameter(r).toFixed(2)}°` : '— (运动观察者 / 关闭透镜)';
+  const dtaudt = Math.sqrt(1 - 2 / r) / obs.gamma;
+  $('hDil').textContent = dtaudt.toFixed(4);
+  $('hG').textContent = (1 / Math.sqrt(1 - 2 / r)).toFixed(4) + (b > 0 ? ' (静止系)' : '');
+  $('hT').textContent = `${simTime.toFixed(1)} M`;
+  $('hPerf').textContent = `${fps.toFixed(0)} fps · ${dbuf.x}×${dbuf.y}`;
+  const w = $('hWarn');
+  w.textContent = obs.warn;
+  w.style.display = obs.warn ? 'block' : 'none';
+}
+
+function adjustResolution(now) {
+  if (!params.autoRes || urlq.has('scale')) return;
+  if (frameTimes.length < 30 || now - lastResAdjust < 1500) return;
+  const sorted = frameTimes.slice().sort((a, b) => a - b);
+  const med = sorted[Math.floor(sorted.length / 2)];
+  frameTimes.length = 0;
+  lastResAdjust = now;
+  if (med > 26 && resScale > 0.35) { resScale = Math.max(0.35, resScale * Math.sqrt(22 / med)); holdUntil = now + 6000; applySize(); }
+  else if (med < 17.5 && resScale < 1 && now > holdUntil) { resScale = Math.min(1, resScale * 1.12); applySize(); }
+}
+
+const MAX_FRAMES = urlq.has('frames') ? parseInt(urlq.get('frames'), 10) : Infinity;   // for automated captures
+let frameCount = 0;
+function frame(now) {
+  if (++frameCount < MAX_FRAMES) requestAnimationFrame(frame);
+  const dt = Math.min(clock.getDelta(), 0.1);
+  frameTimes.push(dt * 1000);
+  fpsAccum += dt; frames++;
+  if (fpsAccum > 0.5) { fps = frames / fpsAccum; frames = 0; fpsAccum = 0; }
+
+  controls.autoRotate = params.autoRotate;
+  if (camera.fov !== params.fov) { camera.fov = params.fov; camera.updateProjectionMatrix(); }
+  let obs = observerState();
+  // advance coordinate time at the rate of the observer's proper time:  dt/dtau = gamma / sqrt(1 - 2M/r)
+  if (!params.paused) {
+    const dtCoord = dt * params.timeScale * obs.gamma / Math.sqrt(1 - 2 / obs.r);
+    simTime += dtCoord;
+    if (obs.mode === 'orbit' && params.followOrbit) {
+      // move with the geodesic: dphi/dt = Omega = sqrt(M/r^3), prograde about +y
+      camera.position.applyAxisAngle(Y_AXIS, Math.pow(obs.r, -1.5) * dtCoord);
+    }
+  }
+  controls.update(dt);
+  obs = observerState();
+  updateUniforms(obs);
+  composer.render();
+  if (pendingShot) {
+    pendingShot = false;
+    const a = document.createElement('a');
+    a.download = `black-hole-${Date.now()}.png`;
+    a.href = renderer.domElement.toDataURL('image/png');
+    a.click();
+  }
+  if (now - lastHud > 250) { lastHud = now; updateHud(obs); }
+  adjustResolution(now);
+}
+
+(async function start() {
+  try {
+    applySize(true);
+    if (urlq.has('t')) simTime = parseFloat(urlq.get('t'));
+    if (urlq.has('pause')) params.paused = true;
+    setLoader('正在生成银河背景 …', 0);
+    await bakeSky();
+    setLoader('正在编译光线追踪着色器 …', 1);
+    await new Promise((r) => requestAnimationFrame(r));
+    updateUniforms(observerState());
+    renderer.compile(scene, camera);
+    composer.render();
+    $('loader').classList.add('hide');
+    clock.getDelta();
+    requestAnimationFrame(frame);
+    window.__bhStarted = true;
+  } catch (err) {
+    console.error(err);
+    fail('初始化失败：' + (err && err.message ? err.message : err));
+  }
+})();
+</script>
+</body>
+</html>
