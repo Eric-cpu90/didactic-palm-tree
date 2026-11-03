@@ -236,8 +236,8 @@ if __name__ == "__main__":
     print("music...", flush=True); m = music()
     print("effects...", flush=True); e = effects()
     print("narration...", flush=True); v, env = narration()
-    duck = (1 - 0.55 * env)[:, None]
-    m = m / (np.abs(m).max() + 1e-9) * 0.42
+    duck = (1 - 0.62 * env)[:, None]
+    m = m / (np.abs(m).max() + 1e-9) * 0.30
     mix = v * 1.0 + m * duck + e * 0.8 * (1 - 0.3 * env)[:, None]
     # fades
     fi, fo = int(1.0 * SR), int(2.5 * SR)
