@@ -51,6 +51,10 @@ def reverb(x, mix=0.3, seconds=2.8, decay=3.2):
     ir = reverb_ir(seconds, decay)
     wet = np.stack([oaconvolve(x[:, 0], ir[:, 0])[: len(x)], oaconvolve(x[:, 1], ir[:, 1])[: len(x)]], 1)
     return x * (1 - mix) + wet * mix
+def movavg(x, k):
+    c = np.concatenate([[0.0], np.cumsum(x)]); h = k // 2
+    i = np.arange(len(x)); a = np.clip(i - h, 0, len(x)); b = np.clip(i + h + 1, 0, len(x))
+    return (c[b] - c[a]) / (b - a)
 midi = lambda m: 440.0 * 2 ** ((m - 69) / 12)
 
 # ---------------- section intensity ----------------
@@ -61,7 +65,7 @@ INT = {"opening": 0.55, "earthmoon": 0.5, "threesteps": 0.6, "timeline": 0.7, "c
 inten = np.zeros(N)
 for s in tl["scenes"]:
     i0, i1 = int(s["start"] * SR), int(s["end"] * SR); inten[i0:i1] = np.maximum(inten[i0:i1], INT.get(s["id"], 0.6))
-k = int(2.5 * SR); inten = np.convolve(inten, np.ones(k) / k, mode="same")
+inten = movavg(inten, int(2.5 * SR))
 
 # ---------------- score ----------------
 def music():
@@ -222,16 +226,16 @@ def narration():
             x = hp(x, 70)
             add(out, x, l["t0"], gain=1.0, pan=0.0)
             i0, i1 = int((l["t0"] - 0.25) * SR), int((l["t1"] + 0.35) * SR); env[max(0, i0):i1] = 1
-    k = int(0.35 * SR); env = np.convolve(env, np.ones(k) / k, mode="same")
+    env = movavg(env, int(0.35 * SR))
     # gentle presence + compression-ish normalisation
     out = out / (np.abs(out).max() + 1e-9) * 0.82
     out = reverb(out, mix=0.06, seconds=0.8, decay=9)
     return out, env
 
 if __name__ == "__main__":
-    print("music..."); m = music()
-    print("effects..."); e = effects()
-    print("narration..."); v, env = narration()
+    print("music...", flush=True); m = music()
+    print("effects...", flush=True); e = effects()
+    print("narration...", flush=True); v, env = narration()
     duck = (1 - 0.55 * env)[:, None]
     m = m / (np.abs(m).max() + 1e-9) * 0.42
     mix = v * 1.0 + m * duck + e * 0.8 * (1 - 0.3 * env)[:, None]
