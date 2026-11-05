@@ -9,7 +9,7 @@ python3 -m pip install -q sherpa-onnx soundfile numpy scipy
 python3 tts.py build/assets/kokoro-int8-multi-lang-v1_1     # build/tts/*.wav + build/timeline.json
 node render/render.js --prep                                 # procedural Earth/Moon textures
 node render/render.js --cues                                 # build/cues.json (sound-effect cues)
-python3 audio.py                                             # build/audio.wav
+python3 audio.py                                             # build/audio.wav (music only; add --voice / --sfx to mix them in)
 rm -f build/parts/*.mp4
 for i in $(seq 0 $((JOBS - 1))); do node render/render.js --part "$i" --of "$JOBS" --threads 1 --crf 24 --preset slow & done
 wait
@@ -17,6 +17,6 @@ wait
 for i in $(seq 0 $((JOBS - 1))); do echo "file 'part$i.mp4'" >> build/parts/list.txt; done
 mkdir -p output
 ffmpeg -y -loglevel error -f concat -safe 0 -i build/parts/list.txt -i build/audio.wav \
-  -map 0:v -map 1:a -c:v copy -c:a aac -b:a 160k -shortest -movflags +faststart output/china-moon-landing.mp4
+  -map 0:v -map 1:a -c:v copy -af loudnorm=I=-16:TP=-1.5:LRA=11 -ar 48000 -c:a aac -b:a 160k -shortest -movflags +faststart output/china-moon-landing.mp4
 python3 subtitles.py
 echo "done: output/china-moon-landing.mp4"

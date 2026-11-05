@@ -233,12 +233,19 @@ def narration():
     return out, env
 
 if __name__ == "__main__":
+    import sys
+    # Default: background music only (subtitles carry the text). Opt in with --voice / --sfx.
+    VOICE, SFX = "--voice" in sys.argv, "--sfx" in sys.argv
     print("music...", flush=True); m = music()
-    print("effects...", flush=True); e = effects()
-    print("narration...", flush=True); v, env = narration()
-    duck = (1 - 0.62 * env)[:, None]
-    m = m / (np.abs(m).max() + 1e-9) * 0.30
-    mix = v * 1.0 + m * duck + e * 0.8 * (1 - 0.3 * env)[:, None]
+    m = m / (np.abs(m).max() + 1e-9) * (0.30 if VOICE else 0.8)
+    mix = np.zeros_like(m)
+    env = np.zeros(N)
+    if VOICE:
+        print("narration...", flush=True); v, env = narration()
+        mix += v; m = m * (1 - 0.62 * env)[:, None]
+    mix += m
+    if SFX:
+        print("effects...", flush=True); mix += effects() * 0.8 * (1 - 0.3 * env)[:, None]
     # fades
     fi, fo = int(1.0 * SR), int(2.5 * SR)
     mix[:fi] *= np.linspace(0, 1, fi)[:, None]; mix[-fo:] *= np.linspace(1, 0, fo)[:, None]

@@ -1,8 +1,8 @@
 # 奔月——中国登月计划全解析（动画科普视频）
 
-成片：[`output/china-moon-landing.mp4`](output/china-moon-landing.mp4)（1920×1080，30 fps，约 9 分 23 秒，中文配音 + 中文字幕 + 配乐/音效）
+成片：[`output/china-moon-landing.mp4`](output/china-moon-landing.mp4)（1920×1080，30 fps，约 9 分 23 秒，中文字幕 + 背景音乐，无配音）
 
-整部视频由代码逐帧生成：画面用 Node.js + Canvas 程序化绘制，配音由离线 TTS 合成，配乐和音效也用代码合成。视频里没有任何第三方图片或录音素材。
+整部视频由代码逐帧生成：画面用 Node.js + Canvas 程序化绘制，背景音乐也用代码合成。视频里没有任何第三方图片或录音素材。
 
 ## 内容结构
 
@@ -39,25 +39,25 @@
 ./build.sh            # 需要 node、python3、ffmpeg；JOBS=4 控制并行渲染进程数
 ```
 
-流程：`fetch_assets.sh` 下载字体、地图数据和 TTS 模型 → `tts.py` 合成配音并生成时间轴 → `render/render.js --cues` 导出音效时间点 → `audio.py` 混音 → 并行渲染画面 → `ffmpeg` 合成成片。
+流程：`fetch_assets.sh` 下载字体、地图数据和 TTS 模型 → `tts.py` 合成解说语音，并按语音时长生成字幕/场景时间轴 → `render/render.js --cues` 导出音效时间点 → `audio.py` 生成背景音乐 → 并行渲染画面 → `ffmpeg` 合成成片。
 
 调试画面可以单独渲染某一帧，例如 `node render/render.js --stills ce5descent@35,crew5@7`，图片输出到 `build/stills/`。
 
 | 文件 | 作用 |
 | --- | --- |
 | `script.json` | 解说词（`s` 为字幕，`v` 为朗读文本，数字写成汉字以保证读音） |
-| `tts.py` | sherpa-onnx + Kokoro v1.1-zh 离线中文 TTS，生成 `build/timeline.json` |
+| `tts.py` | sherpa-onnx + Kokoro v1.1-zh 离线中文 TTS，生成 `build/timeline.json`（决定字幕与场景节奏） |
 | `render/lib/planet.js` | 程序化地球/月球贴图 + 逐像素球体渲染 |
 | `render/lib/art.js` | 火箭、探测器、梦舟、揽月、航天员、月球车等矢量插画 |
 | `render/scenes1.js` / `scenes2.js` | 30 个场景的动画 |
 | `render/render.js` | 时间轴、转场、字幕、并行编码 |
-| `audio.py` | 五声音阶配乐（拨弦 + 铺底）、音效、人声闪避混音 |
+| `audio.py` | 五声音阶配乐（拨弦 + 铺底）。默认只输出背景音乐；加 `--voice` 混入配音（音乐自动闪避），加 `--sfx` 混入音效 |
 
 ## 素材与许可
 
 - 字体：思源黑体 / 思源宋体（Noto Sans/Serif SC）、马善政毛笔楷书（Ma Shan Zheng），均为 SIL OFL。
 - 地球陆地轮廓：Natural Earth（公有领域）。月面贴图按真实月海、撞击坑位置程序化生成，属于示意图。
-- 配音：Kokoro-82M v1.1-zh（Apache-2.0），通过 sherpa-onnx 离线运行。
+- 语音合成（仅用于计算字幕时长，成片默认不含配音）：Kokoro-82M v1.1-zh（Apache-2.0），通过 sherpa-onnx 离线运行。
 - 画面为科普示意图，比例和细节都有简化，不代表航天器的真实外形或尺寸。
 
 ## 事实核对说明
