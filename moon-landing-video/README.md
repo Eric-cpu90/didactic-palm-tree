@@ -1,8 +1,8 @@
 # 奔月——中国登月计划全解析（动画科普视频）
 
-成片：[`output/china-moon-landing.mp4`](output/china-moon-landing.mp4)（1920×1080，30 fps，约 9 分 23 秒，中文字幕 + 背景音乐，无配音）
+成片：[`output/china-moon-landing.mp4`](output/china-moon-landing.mp4)（1920×1080，30 fps，约 9 分 23 秒，中文字幕 + 背景音乐 + 音效，无配音）
 
-整部视频由代码逐帧生成：画面用 Node.js + Canvas 程序化绘制，背景音乐也用代码合成。视频里没有任何第三方图片或录音素材。
+整部视频由代码逐帧生成：画面用 Node.js + Canvas 程序化绘制，背景音乐和音效也用代码合成。视频里没有任何第三方图片或录音素材。
 
 ## 内容结构
 
@@ -39,7 +39,7 @@
 ./build.sh            # 需要 node、python3、ffmpeg；JOBS=4 控制并行渲染进程数
 ```
 
-流程：`fetch_assets.sh` 下载字体、地图数据和 TTS 模型 → `tts.py` 合成解说语音，并按语音时长生成字幕/场景时间轴 → `render/render.js --cues` 导出音效时间点 → `audio.py` 生成背景音乐 → 并行渲染画面 → `ffmpeg` 合成成片。
+流程：`fetch_assets.sh` 下载字体、地图数据和 TTS 模型 → `tts.py` 合成解说语音，并按语音时长生成字幕/场景时间轴 → `render/render.js --cues` 导出音效时间点 → `audio.py` 生成背景音乐并混入音效 → 并行渲染画面 → `ffmpeg` 合成成片。
 
 调试画面可以单独渲染某一帧，例如 `node render/render.js --stills ce5descent@35,crew5@7`，图片输出到 `build/stills/`。
 
@@ -51,7 +51,7 @@
 | `render/lib/art.js` | 火箭、探测器、梦舟、揽月、航天员、月球车等矢量插画 |
 | `render/scenes1.js` / `scenes2.js` | 30 个场景的动画 |
 | `render/render.js` | 时间轴、转场、字幕、并行编码 |
-| `audio.py` | 五声音阶配乐（拨弦 + 铺底）。默认只输出背景音乐；加 `--voice` 混入配音（音乐自动闪避），加 `--sfx` 混入音效 |
+| `audio.py` | 五声音阶配乐（拨弦 + 铺底）+ 音效（火箭轰鸣、对接、转场等）。默认不含配音；加 `--voice` 混入配音（音乐自动闪避），加 `--no-sfx` 去掉音效 |
 
 ## 素材与许可
 

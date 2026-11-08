@@ -141,7 +141,7 @@ def sfx(kind, dur):
         r = lp(brown(n), 260) * 2.2 + bp(noise(n), 200, 1200) * 0.25
         crack = (rng.random(n) < 0.002) * rng.standard_normal(n) * 3; r += bp(crack, 400, 3000) * 0.6
         e = np.clip(x / 1.2, 0, 1) * np.clip((d - x) / (d * 0.55), 0, 1)
-        g = 0.9 if kind == "launch" else 0.45
+        g = 0.65 if kind == "launch" else 0.35
         return np.tanh(r * e * 1.2) * g
     if kind == "burn":
         d = max(dur, 1); n = int(d * SR); x = np.arange(n) / SR
@@ -154,7 +154,7 @@ def sfx(kind, dur):
         for i in range(n):
             y1 += a[i] * (nz[i] - y1); y2 += a[i] * (y1 - y2); out[i] = y2
         out = hp(out, 120) * 2.5
-        g = {"whoosh": 0.5, "whoosh_s": 0.3}.get(kind, 0.16)
+        g = {"whoosh": 0.22, "whoosh_s": 0.15}.get(kind, 0.09)
         return out * np.sin(np.pi * x / d) ** 2 * g
     if kind in ("boom", "trans_flash"):
         n = int(4 * SR); x = np.arange(n) / SR
@@ -162,7 +162,7 @@ def sfx(kind, dur):
         b = np.sin(2 * np.pi * np.cumsum(f) / SR) * np.exp(-x * 1.1)
         b += lp(noise(n), 900) * np.exp(-x * 6) * 0.6
         if kind == "trans_flash": b = hp(noise(n), 3000) * np.clip(x / 0.5, 0, 1) * np.exp(-np.maximum(0, x - 0.5) * 5) * 0.2 + b * 0.3
-        return b * 0.75
+        return b * 0.55
     if kind == "chime":
         n = int(3.5 * SR); x = np.arange(n) / SR; out = np.zeros(n)
         for m, dl in [(81, 0), (86, 0.12), (88, 0.24), (93, 0.36)]:
@@ -234,10 +234,12 @@ def narration():
 
 if __name__ == "__main__":
     import sys
-    # Default: background music only (subtitles carry the text). Opt in with --voice / --sfx.
-    VOICE, SFX = "--voice" in sys.argv, "--sfx" in sys.argv
+    # Default: background music + sound effects (subtitles carry the text).
+    # --voice mixes the narration back in (music ducks under it); --no-sfx drops the effects.
+    VOICE, SFX = "--voice" in sys.argv, "--no-sfx" not in sys.argv
     print("music...", flush=True); m = music()
-    m = m / (np.abs(m).max() + 1e-9) * (0.30 if VOICE else 0.8)
+    MUSIC = 0.30 if VOICE else 0.8
+    m = m / (np.abs(m).max() + 1e-9) * MUSIC
     mix = np.zeros_like(m)
     env = np.zeros(N)
     if VOICE:
@@ -245,10 +247,13 @@ if __name__ == "__main__":
         mix += v; m = m * (1 - 0.62 * env)[:, None]
     mix += m
     if SFX:
-        print("effects...", flush=True); mix += effects() * 0.8 * (1 - 0.3 * env)[:, None]
+        # with narration the effects sit under the voice; without it they are the foreground,
+        # so keep them ~6 dB lower relative to the music bed
+        print("effects...", flush=True); mix += effects() * (0.8 if VOICE else 1.1) * (1 - 0.3 * env)[:, None]
     # fades
     fi, fo = int(1.0 * SR), int(2.5 * SR)
     mix[:fi] *= np.linspace(0, 1, fi)[:, None]; mix[-fo:] *= np.linspace(1, 0, fo)[:, None]
+    mix = mix / (np.abs(mix).max() + 1e-9)
     mix = np.tanh(mix * 1.1) / np.tanh(1.1)
     mix = mix / (np.abs(mix).max() + 1e-9) * 0.93
     sf.write(os.path.join(HERE, "build", "audio.wav"), mix.astype(np.float32), SR, subtype="PCM_16")
