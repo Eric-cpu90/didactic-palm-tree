@@ -1,0 +1,17 @@
+{
+ "open": [
+  {"type":"plain","overlay":{"type":"vquote","size":92,"gap":78,"y":215,"x":960,"lines":[{"text":"世界潮流","at":"open.1.1"},{"text":"浩浩荡荡","at":"open.1.1","frac":0.5},{"text":"顺之则昌","at":"open.1.2"},{"text":"逆之则亡","at":"open.1.2","frac":0.5}],"attrib":"孙中山 · 一九一六年题词","ax":560,"ay":760}}
+ ],
+ "pro": [
+  {"img":"sf1896","box":"left","year":"","cap":"","overlay":{"type":"side","x":1060,"y":360,"w":700,"kicker":"医 生","head":"立志医治一个<br>积贫积弱的国家"}},
+  {"at":"pro.2","img":"usimm1910","box":"right","overlay":{"type":"side","x":170,"y":360,"w":700,"kicker":"革 命 者","head":"屡败屡战<br>百折不挠"}},
+  {"at":"pro.3","img":"portrait_bnf","box":"left","kb":{"z":[1.0,1.08],"f":[[0.5,0.3],[0.5,0.3]]},"overlay":{"type":"side","x":1060,"y":380,"w":760,"kicker":"中国民主革命的伟大先行者","head":"孙中山","body":"1866 — 1925"}}
+ ],
+ "ch1": [
+  {"img":"cuiheng_cc0","year":"1866","cap":"广东香山 · 翠亨村"},
+  {"at":"ch1.2","img":"y1883","box":"left","year":"1883","cap":"十七岁的孙中山"},
+  {"at":"ch1.3","img":"honolulu1","year":"1879","cap":"檀香山港口"},
+  {"at":"ch1.5","img":"hk_college","year":"1887","cap":"香港西医书院师生合影"},
+  {"at":"ch1.7","img":"sidakou","year":"1888","cap":"“四大寇”合影\n前排左起：杨鹤龄、孙中山、陈少白、尤列"}
+ ]
+}

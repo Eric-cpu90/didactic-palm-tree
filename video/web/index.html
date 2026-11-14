@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="zh-Hans">
+<head>
+<meta charset="utf-8">
+<title>天下为公 · 渲染舞台</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="stage">
+  <canvas id="cvA" width="1920" height="1080"></canvas>
+  <canvas id="cvB" width="1920" height="1080"></canvas>
+  <div id="overlays"></div>
+  <div id="vignette"></div>
+  <div id="scrimTop"></div>
+  <div id="scrimBottom"></div>
+  <div id="hud">
+    <div id="chapterTag"><span class="bar"></span><span class="no"></span><span class="ttl"></span></div>
+    <div id="yearBox"><div id="year"></div><div id="caption"></div></div>
+  </div>
+  <div id="subs"><span></span></div>
+  <div id="segments"></div>
+  <div id="grain"></div>
+  <div id="blackout"></div>
+</div>
+<script src="engine.js"></script>
+</body>
+</html>

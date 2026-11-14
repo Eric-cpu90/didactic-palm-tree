@@ -1,0 +1,258 @@
+{
+ "title_portrait": {
+  "src": "portrait_main",
+  "tone": "mono",
+  "focus": [
+   0.5,
+   0.36
+  ],
+  "zoom": 1.0
+ },
+ "calli_txwg": {
+  "src": "txwg_h",
+  "tone": "calligraphy",
+  "crop": [
+   0.0,
+   0.0,
+   0.905,
+   1.0
+  ],
+  "levels": [
+   0.38,
+   0.74
+  ]
+ },
+ "portrait_main": {},
+ "portrait_bnf": {},
+ "txwg_h": {},
+ "txwg_1924": {},
+ "y1883": {},
+ "cuiheng_cc0": {
+  "tone": "color"
+ },
+ "sidakou": {},
+ "hk_college": {},
+ "diploma": {},
+ "xzh_decl": {
+  "tone": "paper",
+  "keep": 0.6
+ },
+ "sf1896": {},
+ "sos": {
+  "tone": "paper"
+ },
+ "cantlie": {},
+ "y1905": {},
+ "minbao": {
+  "tone": "paper"
+ },
+ "sg_tmh": {},
+ "y1907m": {},
+ "usimm1910": {},
+ "hhg2": {
+  "tone": "color"
+ },
+ "hubei_gov": {},
+ "rev_officers": {},
+ "train1912": {},
+ "seated1912": {},
+ "cabinet": {},
+ "senate": {},
+ "mingtomb": {},
+ "abdication": {
+  "tone": "paper"
+ },
+ "yuan1915": {},
+ "gmd1914": {},
+ "jgfl_map": {
+  "tone": "paper",
+  "keep": 0.8
+ },
+ "yongfeng": {},
+ "kmt1_d": {},
+ "gz1924": {},
+ "kobe_cc0": {},
+ "kobe_couple": {},
+ "will": {
+  "tone": "paper"
+ },
+ "funeral_gamble": {},
+ "funeral_bj": {},
+ "fengan_nj": {},
+ "fengan_dutch": {},
+ "ml_entry": {
+  "tone": "color"
+ },
+ "ml_gate_main": {
+  "tone": "color"
+ },
+ "ml_steps": {
+  "tone": "color"
+ },
+ "ml_view01": {
+  "tone": "color"
+ },
+ "gz_statue": {
+  "tone": "color"
+ },
+ "gz_hall": {
+  "tone": "color"
+ },
+ "young2": {},
+ "honolulu1": {},
+ "schoolmates": {},
+ "exam": {
+  "tone": "paper"
+ },
+ "ad_medicine": {
+  "tone": "paper"
+ },
+ "letter132": {
+  "tone": "paper"
+ },
+ "yalu2": {
+  "tone": "paper",
+  "keep": 0.8
+ },
+ "cantlie_letter": {
+  "tone": "paper"
+ },
+ "japan1898": {},
+ "japan1900": {},
+ "tmh_cert": {
+  "tone": "paper",
+  "keep": 0.7
+ },
+ "wanqingyuan": {},
+ "y1908": {},
+ "huanggang": {},
+ "hhg1": {
+  "tone": "color"
+ },
+ "huangxing_grp": {},
+ "rev_canon": {},
+ "rev_march": {
+  "tone": "paper",
+  "keep": 0.75
+ },
+ "rev_hanyang": {},
+ "senate2": {},
+ "mingtomb2": {},
+ "yuan_bnf": {},
+ "oath": {
+  "tone": "paper"
+ },
+ "couple_gz": {},
+ "dys1917b": {},
+ "idc16": {
+  "tone": "paper"
+ },
+ "rail_blueprint": {
+  "tone": "paper",
+  "keep": 0.6
+ },
+ "pres1921": {},
+ "yongfeng2": {},
+ "kmt1_a": {},
+ "whampoa_d": {},
+ "eddy": {},
+ "minsheng_ms": {
+  "tone": "paper"
+ },
+ "sh1924": {},
+ "kobe2": {},
+ "will2": {
+  "tone": "paper"
+ },
+ "funeral_hall": {},
+ "biyun": {},
+ "funeral_gz": {},
+ "ml_gate2": {
+  "tone": "color"
+ },
+ "ml_gate3": {
+  "tone": "color"
+ },
+ "ml_hall": {
+  "tone": "color"
+ },
+ "ml_3": {
+  "tone": "color"
+ },
+ "ml_2024_03": {
+  "tone": "color"
+ },
+ "ml_2024_05": {
+  "tone": "color"
+ },
+ "ml_2024_09": {
+  "tone": "color"
+ },
+ "ml_2024_10": {
+  "tone": "color"
+ },
+ "ml_2024_11": {
+  "tone": "color"
+ },
+ "ml_2024_13": {
+  "tone": "color"
+ },
+ "ml_aerial": {
+  "tone": "color"
+ },
+ "ml_txwg": {
+  "tone": "color"
+ },
+ "ml_49670": {
+  "tone": "color"
+ },
+ "ml_49656": {
+  "tone": "color"
+ },
+ "ml_49632": {
+  "tone": "color"
+ },
+ "ml_49634": {
+  "tone": "color"
+ },
+ "ml_lookdown": {
+  "tone": "color"
+ },
+ "ml_statue": {
+  "tone": "color"
+ },
+ "ml_pano1978": {
+  "tone": "color"
+ },
+ "portrait_bnf2": {},
+ "portrait_dutch": {},
+ "portrait_couplet": {},
+ "portrait_loc": {},
+ "portrait_inukai": {},
+ "family1901": {},
+ "family81": {},
+ "cuiheng_pd": {
+  "tone": "color"
+ },
+ "letter131": {
+  "tone": "paper"
+ },
+ "yalu1": {
+  "tone": "paper",
+  "keep": 0.8
+ },
+ "cantlie2": {},
+ "japan1899": {},
+ "japan1901": {},
+ "hand1897": {
+  "tone": "paper"
+ },
+ "y1907": {},
+ "sg1906": {},
+ "hhg3": {
+  "tone": "color"
+ },
+ "vietnam1902": {},
+ "rev_horse": {},
+ "rev_dutch": {}
+}

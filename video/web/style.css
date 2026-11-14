@@ -1,0 +1,96 @@
+@font-face { font-family: "Song"; src: url("fonts/NotoSerifSC.ttf"); font-weight: 200 900; }
+@font-face { font-family: "Hei"; src: url("fonts/NotoSansSC.ttf"); font-weight: 100 900; }
+@font-face { font-family: "Brush"; src: url("fonts/MaShanZheng.ttf"); }
+@font-face { font-family: "Garamond"; src: url("fonts/CormorantGaramond.ttf"); font-weight: 300 700; }
+
+:root {
+  --ink: #0b0a09;
+  --paper: #ece4d2;
+  --paper-dim: rgba(236, 228, 210, .72);
+  --gold: #c9a567;
+  --gold-dim: rgba(201, 165, 103, .65);
+  --seal: #a8322a;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { background: #000; overflow: hidden; }
+#stage {
+  position: relative; width: 1920px; height: 1080px; overflow: hidden; background: var(--ink);
+  font-family: "Song", serif; color: var(--paper);
+  -webkit-font-smoothing: antialiased; text-rendering: geometricPrecision;
+}
+#stage > * { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; }
+canvas { display: block; }
+#vignette { background: radial-gradient(ellipse 75% 70% at 50% 46%, rgba(0,0,0,0) 55%, rgba(0,0,0,.34) 100%); pointer-events: none; }
+#scrimTop { background: linear-gradient(to bottom, rgba(6,5,4,.62) 0%, rgba(6,5,4,.28) 11%, rgba(6,5,4,0) 24%); }
+#scrimBottom { background: linear-gradient(to top, rgba(6,5,4,.86) 0%, rgba(6,5,4,.55) 13%, rgba(6,5,4,0) 30%); }
+#grain { background: url("../assets/grain.png"); opacity: .055; mix-blend-mode: overlay; pointer-events: none; }
+#blackout { background: #000; opacity: 0; pointer-events: none; }
+
+/* ---------- HUD ---------- */
+#chapterTag { position: absolute; left: 84px; top: 66px; display: flex; align-items: center; height: 34px; font-size: 25px; letter-spacing: .32em; color: var(--paper-dim); white-space: nowrap; }
+#chapterTag .bar { display: inline-block; width: 3px; height: 30px; background: var(--gold); margin-right: 20px; }
+#chapterTag .no { color: var(--gold); margin-right: 22px; font-weight: 500; }
+#chapterTag .ttl { font-weight: 500; }
+#yearBox { position: absolute; right: 84px; top: 44px; text-align: right; }
+#year { font-family: "Garamond", serif; font-weight: 400; font-size: 92px; line-height: 1; letter-spacing: .04em; color: var(--paper); font-variant-numeric: lining-nums; text-shadow: 0 2px 18px rgba(0,0,0,.55); }
+#caption { margin-top: 12px; font-size: 25px; line-height: 1.5; letter-spacing: .12em; color: var(--paper-dim); font-weight: 500; text-shadow: 0 1px 10px rgba(0,0,0,.8); white-space: pre-line; }
+
+/* ---------- subtitles ---------- */
+#subs { top: auto !important; bottom: 78px; height: auto !important; text-align: center; }
+#subs span { font-family: "Hei", sans-serif; font-weight: 500; font-size: 45px; letter-spacing: .07em; color: #fbf8f1; text-shadow: 0 0 3px rgba(0,0,0,.95), 0 2px 10px rgba(0,0,0,.85), 0 0 26px rgba(0,0,0,.55); white-space: nowrap; }
+
+/* ---------- overlays inside shots ---------- */
+.ov { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; }
+.vquote { position: absolute; display: flex; flex-direction: row-reverse; align-items: flex-start; }
+.vquote .col { writing-mode: vertical-rl; font-weight: 600; letter-spacing: .28em; line-height: 1; color: var(--paper); text-shadow: 0 2px 22px rgba(0,0,0,.7); }
+.vquote .col .punct { color: var(--gold-dim); }
+.attrib { position: absolute; font-size: 27px; letter-spacing: .2em; color: var(--gold); font-weight: 500; white-space: nowrap; }
+.attrib::before { content: ""; display: inline-block; width: 64px; height: 1px; background: var(--gold); vertical-align: middle; margin-right: 20px; }
+.hquote { position: absolute; left: 0; width: 1920px; text-align: center; }
+.hquote .ln { font-weight: 600; letter-spacing: .2em; line-height: 1.75; color: var(--paper); text-shadow: 0 2px 22px rgba(0,0,0,.7); }
+.side { position: absolute; }
+.side .kicker { font-size: 26px; letter-spacing: .4em; color: var(--gold); font-weight: 500; margin-bottom: 22px; }
+.side .head { font-size: 64px; font-weight: 700; letter-spacing: .14em; line-height: 1.35; }
+.side .rule { width: 90px; height: 2px; background: var(--gold); margin: 30px 0; }
+.side .body { font-size: 31px; line-height: 1.9; letter-spacing: .1em; color: var(--paper-dim); font-weight: 400; }
+.big { position: absolute; font-family: "Brush", "Song"; color: var(--paper); line-height: 1; white-space: nowrap; text-shadow: 0 4px 40px rgba(0,0,0,.6); }
+.seal { position: absolute; background: var(--seal); color: #f3e7d6; font-weight: 700; display: flex; align-items: center; justify-content: center; border-radius: 6px; writing-mode: vertical-rl; letter-spacing: .12em; box-shadow: 0 2px 14px rgba(0,0,0,.4); }
+.triad { position: absolute; left: 0; width: 1920px; display: flex; justify-content: center; gap: 110px; }
+.triad .item { width: 250px; text-align: center; }
+.triad .item .zi { font-size: 104px; font-weight: 800; letter-spacing: .1em; line-height: 1.2; }
+.triad .item .sub { margin-top: 14px; font-size: 27px; letter-spacing: .3em; color: var(--gold); }
+.mapwrap { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; }
+.mapwrap svg { position: absolute; left: 0; top: 0; }
+.maplabel { position: absolute; font-size: 27px; letter-spacing: .16em; font-weight: 600; color: var(--paper); text-shadow: 0 1px 8px rgba(0,0,0,.9); white-space: nowrap; }
+.maplabel small { display: block; font-family: "Garamond"; font-size: 24px; letter-spacing: .1em; color: var(--gold); font-weight: 500; margin-top: 2px; }
+
+/* ---------- segments: title / chapter card / outro ---------- */
+.seg { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; background: var(--ink); overflow: hidden; }
+.seg .glow { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; background: radial-gradient(ellipse 60% 55% at 50% 50%, rgba(201,165,103,.075), rgba(201,165,103,0) 70%); }
+.card .label { position: absolute; left: 0; width: 1920px; top: 352px; text-align: center; font-size: 34px; letter-spacing: 1.1em; text-indent: 1.1em; color: var(--gold); font-weight: 500; }
+.card .title { position: absolute; left: 0; width: 1920px; top: 426px; text-align: center; font-size: 138px; font-weight: 800; letter-spacing: .3em; text-indent: .3em; line-height: 1.2; white-space: nowrap; }
+.card .title span { display: inline-block; }
+.card .line { position: absolute; left: 960px; top: 632px; height: 1px; background: var(--gold); }
+.card .years { position: absolute; left: 0; width: 1920px; top: 664px; text-align: center; font-family: "Garamond"; font-size: 50px; letter-spacing: .22em; text-indent: .22em; color: var(--paper-dim); font-weight: 400; }
+.card .wm { position: absolute; right: -40px; bottom: -150px; font-family: "Brush"; font-size: 760px; line-height: 1; color: rgba(236,228,210,.028); }
+
+.titleSeg .portrait { position: absolute; right: 0; top: 0; width: 1120px; height: 1080px; overflow: hidden; -webkit-mask-image: linear-gradient(to right, rgba(0,0,0,0) 0%, rgba(0,0,0,.55) 30%, #000 62%); mask-image: linear-gradient(to right, rgba(0,0,0,0) 0%, rgba(0,0,0,.55) 30%, #000 62%); }
+.titleSeg .portrait img { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+.titleSeg .shade { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; background: linear-gradient(to top, rgba(11,10,9,.9) 0%, rgba(11,10,9,0) 34%); }
+.titleSeg .calli { position: absolute; left: 150px; top: 300px; }
+.titleSeg .calli img { display: block; height: 250px; }
+.titleSeg .bigtitle { position: absolute; left: 150px; top: 322px; font-family: "Brush"; font-size: 236px; line-height: 1; letter-spacing: .04em; white-space: nowrap; }
+.titleSeg .rule { position: absolute; left: 156px; top: 600px; height: 2px; background: var(--gold); }
+.titleSeg .sub { position: absolute; left: 156px; top: 632px; font-size: 44px; letter-spacing: .34em; font-weight: 600; white-space: nowrap; }
+.titleSeg .dates { position: absolute; left: 156px; top: 716px; font-family: "Garamond"; font-size: 54px; letter-spacing: .2em; color: var(--gold); white-space: nowrap; }
+
+.outro .center { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; }
+.outro .bigtitle { position: absolute; left: 0; width: 1920px; top: 300px; text-align: center; font-family: "Brush"; font-size: 250px; line-height: 1; letter-spacing: .1em; text-indent: .1em; }
+.outro .calli { position: absolute; left: 0; width: 1920px; top: 318px; text-align: center; }
+.outro .calli img { height: 270px; }
+.outro .name { position: absolute; left: 0; width: 1920px; top: 640px; text-align: center; font-size: 46px; letter-spacing: .6em; text-indent: .6em; font-weight: 600; }
+.outro .dates { position: absolute; left: 0; width: 1920px; top: 722px; text-align: center; font-family: "Garamond"; font-size: 50px; letter-spacing: .24em; text-indent: .24em; color: var(--gold); }
+.outro .credits { position: absolute; left: 0; width: 1920px; top: 0; height: 1080px; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+.outro .credits .ded { font-size: 50px; letter-spacing: .34em; text-indent: .34em; font-weight: 600; margin-bottom: 64px; }
+.outro .credits .row { font-size: 25px; line-height: 2.0; letter-spacing: .1em; color: var(--paper-dim); text-align: center; max-width: 1500px; }
+.outro .credits .row b { color: var(--gold); font-weight: 500; margin-right: 1.2em; }
