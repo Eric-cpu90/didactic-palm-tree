@@ -2,7 +2,7 @@
 
 Reads  images.json (curated list), <raw dir>/meta.json + files (downloaded from Wikimedia Commons)
 Writes assets/img/<key>.jpg, assets/img/<key>.bg.jpg, assets/manifest.json, assets/grain.png
-Usage: python3 tools/images.py <raw dir>
+Usage: python3 tools/images.py <raw dir> [<fallback raw dir> ...]
 """
 import os, sys, json
 import numpy as np
@@ -12,7 +12,7 @@ Image.MAX_IMAGE_PIXELS = None
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 OUT = os.path.join(ROOT, "assets", "img")
-MAXSIDE = 2200
+MAXSIDE = 2000
 
 SHADOW = np.array([12, 10, 8], dtype=np.float32)
 MID = np.array([138, 128, 112], dtype=np.float32)
@@ -52,8 +52,10 @@ def tone(im, mode, spec):
 
 def backdrop(im):
     b = ImageOps.fit(im, (480, 270), Image.LANCZOS)
-    b = b.filter(ImageFilter.GaussianBlur(14))
-    b = ImageEnhance.Brightness(b).enhance(0.62)
+    b = ImageOps.autocontrast(b, cutoff=2)
+    b = ImageEnhance.Contrast(b).enhance(0.55)
+    b = b.filter(ImageFilter.GaussianBlur(22))
+    b = ImageEnhance.Brightness(b).enhance(0.50)
     return b
 
 
@@ -71,10 +73,13 @@ def calligraphy(im, spec):
     return Image.fromarray(rgba, "RGBA")
 
 
-def main(raw):
+def main(raws):
     os.makedirs(OUT, exist_ok=True)
     spec_all = json.load(open(os.path.join(ROOT, "images.json"), encoding="utf-8"))
-    meta = json.load(open(os.path.join(raw, "meta.json"), encoding="utf-8"))
+    meta = {}
+    for d in reversed(raws):                      # earlier directories win
+        for k, v in json.load(open(os.path.join(d, "meta.json"), encoding="utf-8")).items():
+            meta[k] = dict(v, dir=d)
     manifest = {}
     for key, spec in spec_all.items():
         src = spec.get("src", key)
@@ -82,7 +87,7 @@ def main(raw):
             print("  (not downloaded yet)", key)
             continue
         m = meta[src]
-        im = Image.open(os.path.join(raw, m["file"]))
+        im = Image.open(os.path.join(m["dir"], m["file"]))
         im = ImageOps.exif_transpose(im)
         if im.mode not in ("RGB", "L"):
             im = im.convert("RGB")
@@ -109,6 +114,7 @@ def main(raw):
             backdrop(out).save(os.path.join(ROOT, "assets", f"img/{key}.bg.jpg"), quality=80)
             entry["bg"] = f"img/{key}.bg.jpg"
         entry.update({"file": fn, "w": out.width, "h": out.height})
+        entry["cover"] = bool(spec.get("cover", mode == "color"))
         for k in ("focus", "zoom"):
             if k in spec:
                 entry[k] = spec[k]
@@ -122,4 +128,4 @@ def main(raw):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1])
+    main(sys.argv[1:])

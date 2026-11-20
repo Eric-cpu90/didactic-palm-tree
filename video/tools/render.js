@@ -32,8 +32,8 @@ function serve() {
   const maps = fs.existsSync(mapsFile) ? JSON.parse(fs.readFileSync(mapsFile, 'utf8')) : {};
   const fps = tl.fps;
   const still = args.still != null;
-  const f0 = still ? Math.round(parseFloat(args.still) * fps) : Math.round(parseFloat(args.from || 0) * fps);
-  const f1 = still ? f0 + 1 : Math.min(tl.frames, Math.round(parseFloat(args.to || tl.duration) * fps));
+  const f0 = args.stills ? 0 : still ? Math.round(parseFloat(args.still) * fps) : Math.round(parseFloat(args.from || 0) * fps);
+  const f1 = args.stills ? tl.frames : still ? f0 + 1 : Math.min(tl.frames, Math.round(parseFloat(args.to || tl.duration) * fps));
 
   const srv = await serve();
   const browser = await chromium.launch({ args: ['--disable-lcd-text', '--force-color-profile=srgb', '--font-render-hinting=none'] });
@@ -44,7 +44,13 @@ function serve() {
   const info = await page.evaluate(([a, b, c, r]) => window.init(a, b, c, r), [tl, man, maps, [f0 / fps, f1 / fps]]);
   const cdp = await page.context().newCDPSession(page);
 
-  if (still) {
+  if (args.stills) {
+    const dir = args.dir || path.join(ROOT, 'build/stills'); fs.mkdirSync(dir, { recursive: true });
+    for (const ts of args.stills.split(',')) {
+      await page.evaluate(t => window.renderAt(t), parseFloat(ts));
+      await page.screenshot({ path: path.join(dir, `s_${parseFloat(ts).toFixed(2).padStart(7, '0')}.jpg`), type: 'jpeg', quality: 88 });
+    }
+  } else if (still) {
     await page.evaluate(t => window.renderAt(t), f0 / fps);
     await page.screenshot({ path: args.png || path.join(ROOT, 'build/still.png') });
   } else {

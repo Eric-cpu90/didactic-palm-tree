@@ -113,21 +113,32 @@ def build():
             if i == 0 and "at" not in sh:
                 starts.append(c["narr_t0"] - CARD_GAP - 0.2 if cid != "open" else 0.0)
             else:
-                starts.append(anchor(sh["at"]) - sh.get("lead", 0.4))
+                a = sh["at"]
+                dur = (unit_time[a][1] - unit_time[a][0]) if a in unit_time else 0
+                starts.append(anchor(a) + sh.get("frac", 0) * dur - sh.get("lead", 0.4))
         for i, sh in enumerate(shots):
             t0 = starts[i]
             t1 = starts[i + 1] if i + 1 < len(shots) else c["t1"] + 0.3
-            assert t1 > t0 + 1.0, f"shot too short: {cid} #{i} {sh} ({t0:.2f}-{t1:.2f})"
+            assert t1 > t0 + 2.0, f"shot too short: {cid} #{i} {sh} ({t0:.2f}-{t1:.2f})"
             rec = dict(sh)
             rec.update({"chapter": cid, "t0": round(t0, 3), "t1": round(t1, 3)})
-            for ln in rec.get("lines", []):
-                if "at" in ln:
-                    ln["t"] = round(anchor(ln["at"]) - 0.15, 3)
-            for ln in rec.get("marks", []):
-                if "at" in ln:
-                    ln["t"] = round(anchor(ln["at"]) - 0.15, 3)
+            def resolve(node):
+                if isinstance(node, dict):
+                    if "at" in node and node is not rec:
+                        a = node["at"]
+                        base = anchor(a)
+                        dur = (unit_time[a][1] - unit_time[a][0]) if a in unit_time else 0
+                        node["t"] = round(base + node.get("frac", 0) * dur + node.get("dt", -0.15), 3)
+                    for v in node.values():
+                        resolve(v)
+                elif isinstance(node, list):
+                    for v in node:
+                        resolve(v)
+            resolve(rec.get("overlay"))
             tl["shots"].append(rec)
     tl["shots"].sort(key=lambda s: s["t0"])
+    cp = os.path.join(ROOT, "credits.html")
+    tl["credits_html"] = open(cp, encoding="utf-8").read() if os.path.exists(cp) else ""
 
     # narration track
     total = np.zeros(int((t + 1) * SR), dtype=np.float32)

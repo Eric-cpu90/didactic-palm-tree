@@ -23,17 +23,17 @@ async function loadBitmap(file) {
 
 /* ------------------------------------------------------------------ shots */
 const BOX = {
-  center: [250, 150, 1420, 720],
-  left: [120, 150, 880, 730],
-  right: [920, 150, 880, 730],
-  wide: [150, 130, 1620, 760],
+  center: [250, 136, 1420, 700],
+  left: [120, 136, 880, 700],
+  right: [920, 136, 880, 700],
+  wide: [150, 136, 1620, 700],
 };
 
 function fitOf(shot) {
   if (!shot.img) return 'plain';
   if (shot.fit) return shot.fit;
   const m = MAN[shot.img];
-  return (m.w >= 1500 && m.w / m.h >= 1.3) ? 'cover' : 'frame';
+  return m.cover ? 'cover' : 'frame';
 }
 
 function drawCover(ctx, bmp, z, fx, fy, dw = W, dh = H, dx = 0, dy = 0) {
@@ -62,15 +62,16 @@ function drawShot(ctx, shot, t) {
   } else {
     // framed print on a blurred backdrop
     drawCover(ctx, bitmaps.get(m.bg), lerp(1.08, 1.16, p), 0.5, 0.5);
-    ctx.fillStyle = 'rgba(9,8,7,.42)'; ctx.fillRect(0, 0, W, H);
-    const box = BOX[shot.box || 'center'];
+    ctx.fillStyle = 'rgba(9,8,7,.30)'; ctx.fillRect(0, 0, W, H);
+    const box = Array.isArray(shot.box) ? shot.box : BOX[shot.box || 'center'];
     const bmp = bitmaps.get(m.file);
     const crop = shot.crop || [0, 0, 1, 1];                 // visible part of the image (fractions)
     const iw = bmp.width * (crop[2] - crop[0]), ih = bmp.height * (crop[3] - crop[1]);
-    const s = Math.min(box[2] / iw, box[3] / ih) * lerp(1.0, 1.018, p);
+    const s = Math.min(box[2] / iw, box[3] / ih, shot.maxScale || 1.9) * lerp(1.0, 1.018, p);
     const fw = iw * s, fh = ih * s;
     const x = box[0] + (box[2] - fw) / 2, y = box[1] + (box[3] - fh) / 2;
     const mat = 9;
+    shot._frame = { x: x - mat, y: y - mat, w: fw + 2 * mat, h: fh + 2 * mat };
     ctx.save();
     ctx.shadowColor = 'rgba(0,0,0,.62)'; ctx.shadowBlur = 70; ctx.shadowOffsetY = 22;
     ctx.fillStyle = '#e4dac5';
@@ -87,6 +88,11 @@ function drawShot(ctx, shot, t) {
     ctx.restore();
   }
   if (shot.dim) { ctx.fillStyle = `rgba(9,8,7,${shot.dim})`; ctx.fillRect(0, 0, W, H); }
+  if (shot.shade) {
+    const g = ctx.createLinearGradient(0, 0, 0, 330);
+    g.addColorStop(0, `rgba(6,5,4,${shot.shade})`); g.addColorStop(1, 'rgba(6,5,4,0)');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, 330);
+  }
 }
 
 /* --------------------------------------------------------------- overlays */
@@ -121,7 +127,7 @@ const BUILD = {
   },
   hquote(root, o) {
     const box = el('div', 'hquote'); box.style.top = (o.y || 380) + 'px';
-    const lns = o.lines.map(ln => { const d = el('div', 'ln', ln.text); d.style.fontSize = (ln.size || o.size || 62) + 'px'; if (ln.color) d.style.color = ln.color; box.appendChild(d); return d; });
+    const lns = o.lines.map(ln => { const d = el('div', 'ln', ln.text); d.style.fontSize = (ln.size || o.size || 62) + 'px'; if (ln.color) d.style.color = ln.color; if (ln.font) { d.style.fontFamily = ln.font; d.style.fontWeight = 400; d.style.lineHeight = 1.28; } box.appendChild(d); return d; });
     root.appendChild(box);
     let at = null;
     if (o.attrib) { at = el('div', 'attrib', o.attrib); at.style.left = (o.ax || 1180) + 'px'; at.style.top = (o.ay || 800) + 'px'; root.appendChild(at); }
@@ -138,6 +144,7 @@ const BUILD = {
     const items = [];
     if (o.kicker) items.push(box.appendChild(el('div', 'kicker', o.kicker)));
     if (o.head) items.push(box.appendChild(el('div', 'head', o.head)));
+    if (o.quote) { items.push(box.appendChild(el('div', 'rule'))); items.push(box.appendChild(el('div', 'quote', o.quote))); }
     if (o.body) { items.push(box.appendChild(el('div', 'rule'))); items.push(box.appendChild(el('div', 'body', o.body))); }
     root.appendChild(box);
     return (t, shot) => {
@@ -174,60 +181,90 @@ const BUILD = {
     const md = MAPS[o.map];
     const wrap = el('div', 'mapwrap');
     const ns = 'http://www.w3.org/2000/svg';
-    const svg = document.createElementNS(ns, 'svg'); svg.setAttribute('width', W); svg.setAttribute('height', H); svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
-    const proj = (lon, lat) => {
-      let dx = ((lon - md.center + 540) % 360) - 180;
-      return [W / 2 + (dx - (o.cx || 0)) * md.scale * (o.zoom || 1), H / 2 - (lat - (o.cy != null ? o.cy : md.lat0)) * md.scale * (o.zoom || 1)];
-    };
-    let d = '';
-    const r = (o.dot || 2.3);
-    const g = document.createElementNS(ns, 'g'); g.setAttribute('fill', 'rgba(236,228,210,.26)');
+    const [clon, clat] = o.center, sc = o.scale, kx = o.kx || 1;
+    const ox = o.ox != null ? o.ox : W / 2, oy = o.oy != null ? o.oy : H / 2;
+    const proj = (lon, lat) => [ox + ((((lon - clon + 540) % 360) + 360) % 360 - 180) * sc * kx, oy - (lat - clat) * sc];
+    const cv = el('canvas'); cv.width = W; cv.height = H;
+    const g = cv.getContext('2d'); g.fillStyle = o.dotColor || 'rgba(236,228,210,.44)';
+    const r = o.dot || 2.3;
     for (const [lon, lat] of md.dots) {
       const [x, y] = proj(lon, lat);
       if (x < -10 || x > W + 10 || y < -10 || y > H + 10) continue;
-      const c = document.createElementNS(ns, 'circle'); c.setAttribute('cx', x.toFixed(1)); c.setAttribute('cy', y.toFixed(1)); c.setAttribute('r', r); g.appendChild(c);
+      g.beginPath(); g.arc(x, y, r, 0, 6.2832); g.fill();
     }
-    svg.appendChild(g);
+    wrap.appendChild(cv);
+    const svg = document.createElementNS(ns, 'svg'); svg.setAttribute('width', W); svg.setAttribute('height', H); svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    wrap.appendChild(svg);
+    const P = id => o.points.find(p => p.id === id);
     const routes = (o.routes || []).map(rt => {
-      const a = o.points.find(p => p.id === rt.from), b = o.points.find(p => p.id === rt.to);
+      const a = P(rt.from), b = P(rt.to);
       const [x0, y0] = proj(a.lon, a.lat), [x1, y1] = proj(b.lon, b.lat);
       const mx = (x0 + x1) / 2, my = (y0 + y1) / 2, len = Math.hypot(x1 - x0, y1 - y0);
       const bend = (rt.bend != null ? rt.bend : 0.18) * len;
-      const nx = -(y1 - y0) / len, ny = (x1 - x0) / len;
+      const nx = (y1 - y0) / len, ny = -(x1 - x0) / len;
       const path = document.createElementNS(ns, 'path');
       path.setAttribute('d', `M${x0},${y0} Q${mx + nx * bend},${my + ny * bend} ${x1},${y1}`);
-      path.setAttribute('fill', 'none'); path.setAttribute('stroke', '#c9a567'); path.setAttribute('stroke-width', 3); path.setAttribute('stroke-linecap', 'round');
+      path.setAttribute('fill', 'none'); path.setAttribute('stroke', '#c9a567'); path.setAttribute('stroke-width', o.stroke || 3); path.setAttribute('stroke-linecap', 'round');
       svg.appendChild(path);
       const L = path.getTotalLength(); path.setAttribute('stroke-dasharray', L); path.setAttribute('stroke-dashoffset', L);
       return { rt, path, L };
     });
     const pts = o.points.map(pt => {
       const [x, y] = proj(pt.lon, pt.lat);
-      const halo = document.createElementNS(ns, 'circle'); halo.setAttribute('cx', x); halo.setAttribute('cy', y); halo.setAttribute('r', 16); halo.setAttribute('fill', 'none'); halo.setAttribute('stroke', '#c9a567'); halo.setAttribute('stroke-width', 1.5);
-      const dot = document.createElementNS(ns, 'circle'); dot.setAttribute('cx', x); dot.setAttribute('cy', y); dot.setAttribute('r', 7); dot.setAttribute('fill', '#e9dcc0');
+      const halo = document.createElementNS(ns, 'circle'); halo.setAttribute('cx', x); halo.setAttribute('cy', y); halo.setAttribute('fill', 'none'); halo.setAttribute('stroke', '#c9a567'); halo.setAttribute('stroke-width', 1.6);
+      const dot = document.createElementNS(ns, 'circle'); dot.setAttribute('cx', x); dot.setAttribute('cy', y); dot.setAttribute('fill', pt.hidden ? 'none' : '#f0e4c8');
       svg.appendChild(halo); svg.appendChild(dot);
-      const lab = el('div', 'maplabel', pt.name + (pt.sub ? `<small>${pt.sub}</small>` : ''));
-      const dxp = pt.dx != null ? pt.dx : 22, dyp = pt.dy != null ? pt.dy : -20;
-      if (pt.align === 'right') { lab.style.right = (W - x + dxp) + 'px'; lab.style.textAlign = 'right'; } else lab.style.left = (x + dxp) + 'px';
-      lab.style.top = (y + dyp) + 'px';
-      wrap.appendChild(lab);
+      let lab = null;
+      if (pt.name) {
+        lab = el('div', 'maplabel', pt.name + (pt.sub ? `<small>${pt.sub}</small>` : ''));
+        if (o.labelSize) lab.style.fontSize = o.labelSize + 'px';
+        const dxp = pt.dx != null ? pt.dx : 20, dyp = pt.dy != null ? pt.dy : -18;
+        if (pt.align === 'right') { lab.style.right = (W - x + dxp) + 'px'; lab.style.textAlign = 'right'; } else lab.style.left = (x + dxp) + 'px';
+        lab.style.top = (y + dyp) + 'px';
+        wrap.appendChild(lab);
+      }
       return { pt, halo, dot, lab };
     });
-    wrap.insertBefore(svg, wrap.firstChild);
+    if (o.title) { const tt = el('div', 'maptitle', o.title); tt.style.left = (o.tx || 120) + 'px'; tt.style.top = (o.ty || 800) + 'px'; wrap.appendChild(tt); }
     root.appendChild(wrap);
     return (t, shot) => {
-      g.setAttribute('opacity', ramp(t, shot.t0 - 0.2, 1.2));
+      cv.style.opacity = ramp(t, shot.t0 - 0.3, 1.2);
       for (const { pt, halo, dot, lab } of pts) {
-        const p = easeOut((t - pt.t) / 0.8);
-        dot.setAttribute('opacity', p); dot.setAttribute('r', lerp(2, 7, p));
-        const q = clamp((t - pt.t) / 1.6);
-        halo.setAttribute('opacity', q > 0 ? (1 - q) * 0.9 + 0.25 * (q >= 1 ? 1 : 0) : 0); halo.setAttribute('r', lerp(8, 30, easeOut(q)) * (q >= 1 ? 0.55 : 1));
-        lab.style.opacity = p; lab.style.transform = `translateY(${(1 - p) * 8}px)`;
+        const tt = pt.t != null ? pt.t : shot.t0 + 0.6;
+        const p = easeOut((t - tt) / 0.8), R = pt.r || 7;
+        dot.setAttribute('opacity', p); dot.setAttribute('r', lerp(1, R, p));
+        const q = clamp((t - tt) / 1.8);
+        halo.setAttribute('opacity', (t < tt || pt.hidden) ? 0 : lerp(0.95, 0.38, q)); halo.setAttribute('r', lerp(R, R * 2.6, easeOut(q)));
+        if (lab) { lab.style.opacity = p; lab.style.transform = `translateY(${(1 - p) * 8}px)`; }
       }
       for (const { rt, path, L } of routes) {
-        const p = smooth((t - rt.t) / (rt.dur || 2.2));
-        path.setAttribute('stroke-dashoffset', L * (1 - p)); path.setAttribute('opacity', p > 0 ? 0.95 : 0);
+        const t0 = rt.t != null ? rt.t : shot.t0 + 1.2;
+        const p = smooth((t - t0) / (rt.dur || 2.2));
+        path.setAttribute('stroke-dashoffset', L * (1 - p)); path.setAttribute('opacity', t > t0 ? 0.95 : 0);
       }
+    };
+  },
+  row(root, o) {
+    // a row of small framed prints (processed images) with labels
+    const n = o.items.length, hgt = o.h || 420, gap = o.gap || 44;
+    const ws = o.items.map(it => { const m = MAN[it.img]; const c = it.crop || [0, 0, 1, 1]; return hgt * (m.w * (c[2] - c[0])) / (m.h * (c[3] - c[1])); });
+    const total = ws.reduce((a, b) => a + b, 0) + gap * (n - 1);
+    let x = (W - total) / 2;
+    const cells = o.items.map((it, i) => {
+      const m = MAN[it.img], c = it.crop || [0, 0, 1, 1];
+      const cell = el('div', 'rowcell'); cell.style.left = x + 'px'; cell.style.top = (o.y || 250) + 'px'; cell.style.width = ws[i] + 'px';
+      const fr = el('div', 'rowframe'); fr.style.width = ws[i] + 'px'; fr.style.height = hgt + 'px';
+      const im = el('img'); im.src = '../assets/' + m.file;
+      const sc = hgt / (m.h * (c[3] - c[1]));
+      im.style.width = (m.w * sc) + 'px'; im.style.height = (m.h * sc) + 'px'; im.style.left = (-c[0] * m.w * sc) + 'px'; im.style.top = (-c[1] * m.h * sc) + 'px';
+      fr.appendChild(im); cell.appendChild(fr);
+      cell.appendChild(el('div', 'rowyear', it.year || '')); cell.appendChild(el('div', 'rowcap', it.cap || ''));
+      root.appendChild(cell); x += ws[i] + gap;
+      return cell;
+    });
+    return (t, shot) => {
+      const base = o.t != null ? o.t : shot.t0 + 0.3, st = o.stagger != null ? o.stagger : 0.5;
+      cells.forEach((c, i) => { const p = easeOut((t - base - i * st) / 1.0); c.style.opacity = p; c.style.transform = `translateY(${(1 - p) * 22}px)`; });
     };
   },
 };
@@ -268,8 +305,8 @@ function buildSegment(seg) {
     seg._upd = (t) => {
       const u = t - seg.t0, d = seg.t1 - seg.t0, out = 1 - ramp(t, seg.t1 - 1.0, 0.9);
       const f = pm.focus || [0.5, 0.36], zoom = lerp(1.0, 1.07, u / d);
-      const sc = Math.max(1120 / pm.w, 1080 / pm.h) * (pm.zoom || 1.0) * zoom;
-      const x = 560 - f[0] * pm.w * sc, y = 470 - f[1] * pm.h * sc;
+      const sc = Math.max(920 / pm.w, 1080 / pm.h) * (pm.zoom || 1.0) * zoom;
+      const x = Math.min(0, Math.max(920 - pm.w * sc, 460 - f[0] * pm.w * sc)), y = Math.min(0, Math.max(1080 - pm.h * sc, 500 - f[1] * pm.h * sc));
       img.style.transform = `translate(${x}px,${y}px) scale(${sc})`;
       pw.style.opacity = ramp(u, 0.2, 2.2) * out * 0.92;
       const cp = easeOut((u - 1.2) / 1.8);
@@ -369,7 +406,11 @@ window.renderAt = function (t) {
     ya = cur.year ? Math.min(same(prev, cur, 'year') ? 1 : ramp(t, cur.t0 + 0.1, 0.7), same(cur, next, 'year') ? 1 : 1 - ramp(t, cur.t1 - 0.5, 0.45)) : 0;
     ca = cur.cap ? Math.min(same(prev, cur, 'cap') ? 1 : ramp(t, cur.t0 + 0.35, 0.8), same(cur, next, 'cap') ? 1 : 1 - ramp(t, cur.t1 - 0.5, 0.45)) : 0;
     if (cur.year) yearEl.textContent = cur.year;
-    if (cur.cap) capEl.textContent = cur.cap;
+    if (cur.cap) {
+      const fr = fitOf(cur) === 'frame' ? cur._frame : null;
+      if (fr) { capEl.textContent = cur.cap.replace(/\n/g, '　'); capEl.style.whiteSpace = 'nowrap'; capEl.style.left = (fr.x + 2) + 'px'; capEl.style.top = (fr.y + fr.h + 20) + 'px'; capEl.style.bottom = 'auto'; }
+      else { capEl.textContent = cur.cap; capEl.style.whiteSpace = 'pre-line'; capEl.style.left = '84px'; capEl.style.top = 'auto'; capEl.style.bottom = '146px'; }
+    }
   }
   yearEl.style.opacity = ya; capEl.style.opacity = ca;
 
