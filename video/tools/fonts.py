@@ -7,7 +7,7 @@ import os, sys, glob, string, subprocess
 HERE = os.path.dirname(os.path.abspath(__file__)); ROOT = os.path.dirname(HERE)
 src = sys.argv[1]
 text = set(string.printable) | set("—–·…“”‘’《》〈〉「」、，。；：？！（）　°")
-for f in ["narration.txt", "shots.json", "credits.html", "web/engine.js", "web/style.css"]:
+for f in ["narration.txt", "shots.json", "credits.html", "web/engine.js", "web/style.css", "player/template.html"] + sys.argv[2:]:
     p = os.path.join(ROOT, f)
     if os.path.exists(p):
         text |= set(open(p, encoding="utf-8").read())

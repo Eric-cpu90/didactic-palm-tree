@@ -1,5 +1,7 @@
 'use strict';
-/* Deterministic frame renderer: window.init(timeline, manifest, range) then window.renderAt(t). */
+/* Deterministic frame renderer: window.init(timeline, manifest, maps, range, opts) then window.renderAt(t).
+ * Offline rendering preloads every image in `range`. A live player passes opts.lazy and calls
+ * window.prepare(t) as time moves, so only the images near the playhead stay decoded. */
 const W = 1920, H = 1080;
 const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
 const lerp = (a, b, p) => a + (b - a) * p;
@@ -14,12 +16,47 @@ const bitmaps = new Map();
 let ctxA, ctxB, plainBg;
 const NUM = { ch1: '一', ch2: '二', ch3: '三', ch4: '四', ch5: '五', ch6: '六', ch7: '七', ch8: '八', end: '终' };
 
+const ASSET = () => window.STAGE_ASSETS || '../assets/';
+const pending = new Map();
+let RES = 1;
 async function loadBitmap(file) {
   if (bitmaps.has(file)) return;
-  const r = await fetch('../assets/' + file);
-  if (!r.ok) throw new Error('missing asset ' + file);
-  bitmaps.set(file, await createImageBitmap(await r.blob()));
+  if (pending.has(file)) return pending.get(file);
+  const job = (async () => {
+    const r = await fetch(ASSET() + file);
+    if (!r.ok) throw new Error('missing asset ' + file);
+    bitmaps.set(file, await createImageBitmap(await r.blob()));
+  })().finally(() => pending.delete(file));
+  pending.set(file, job);
+  return job;
 }
+function filesOf(s) {
+  if (!s.img) return [];
+  const m = MAN[s.img], fit = fitOf(s), out = [];
+  if (fit !== 'bg') out.push(m.file);
+  if (fit !== 'cover') out.push(m.bg);
+  return out;
+}
+/* live mode: decode images for shots in [t - back, t + ahead], drop the rest */
+window.prepare = async function (t, ahead = 24, back = 4) {
+  const keep = new Set(), want = [];
+  for (const s of TL.shots) {
+    const near = s.t1 > t - back - 20 && s.t0 < t + ahead + 20;
+    const soon = s.t1 > t - back && s.t0 < t + ahead;
+    for (const f of filesOf(s)) { if (near) keep.add(f); if (soon) want.push(f); }
+  }
+  for (const [f, b] of bitmaps) if (!keep.has(f)) { b.close && b.close(); bitmaps.delete(f); }
+  await Promise.all(want.map(f => loadBitmap(f).catch(() => 0)));
+};
+/* live mode: canvas backing store sized to the displayed size */
+window.setResolution = function (r) {
+  RES = Math.max(0.25, Math.min(1, r));
+  for (const [cv, ctx] of [[$('#cvA'), ctxA], [$('#cvB'), ctxB]]) {
+    cv.width = Math.round(W * RES); cv.height = Math.round(H * RES);
+    cv.style.width = W + 'px'; cv.style.height = H + 'px';
+    ctx.setTransform(RES, 0, 0, RES, 0, 0);
+  }
+};
 
 /* ------------------------------------------------------------------ shots */
 const BOX = {
@@ -49,12 +86,14 @@ function drawShot(ctx, shot, t) {
   const fit = fitOf(shot);
   ctx.globalAlpha = 1;
   ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
-  if (fit === 'plain') { ctx.drawImage(plainBg, 0, 0); return; }
+  if (fit === 'plain') { ctx.drawImage(plainBg, 0, 0, W, H); return; }
   const m = MAN[shot.img];
   const kb = shot.kb || {};
   const z = kb.z || (fit === 'cover' ? [1.03, 1.11] : [1.0, 1.05]);
   const f = kb.f || [[0.5, 0.42], [0.5, 0.42]];
   const zz = lerp(z[0], z[1], p), fx = lerp(f[0][0], f[1][0], p), fy = lerp(f[0][1], f[1][1], p);
+  const need = filesOf(shot);
+  if (need.some(f => !bitmaps.has(f))) { ctx.drawImage(plainBg, 0, 0, W, H); return; }   // still loading (live mode only)
   if (fit === 'cover') {
     drawCover(ctx, bitmaps.get(m.file), zz, fx, fy);
   } else if (fit === 'bg') {
@@ -73,7 +112,7 @@ function drawShot(ctx, shot, t) {
     const mat = 9;
     shot._frame = { x: x - mat, y: y - mat, w: fw + 2 * mat, h: fh + 2 * mat };
     ctx.save();
-    ctx.shadowColor = 'rgba(0,0,0,.62)'; ctx.shadowBlur = 70; ctx.shadowOffsetY = 22;
+    ctx.shadowColor = 'rgba(0,0,0,.62)'; ctx.shadowBlur = 70 * RES; ctx.shadowOffsetY = 22 * RES;
     ctx.fillStyle = '#e4dac5';
     ctx.fillRect(x - mat, y - mat, fw + 2 * mat, fh + 2 * mat);
     ctx.restore();
@@ -254,7 +293,7 @@ const BUILD = {
       const m = MAN[it.img], c = it.crop || [0, 0, 1, 1];
       const cell = el('div', 'rowcell'); cell.style.left = x + 'px'; cell.style.top = (o.y || 250) + 'px'; cell.style.width = ws[i] + 'px';
       const fr = el('div', 'rowframe'); fr.style.width = ws[i] + 'px'; fr.style.height = hgt + 'px';
-      const im = el('img'); im.src = '../assets/' + m.file;
+      const im = el('img'); im.src = ASSET() + m.file;
       const sc = hgt / (m.h * (c[3] - c[1]));
       im.style.width = (m.w * sc) + 'px'; im.style.height = (m.h * sc) + 'px'; im.style.left = (-c[0] * m.w * sc) + 'px'; im.style.top = (-c[1] * m.h * sc) + 'px';
       fr.appendChild(im); cell.appendChild(fr);
@@ -292,10 +331,10 @@ function buildSegment(seg) {
   } else if (seg.type === 'title') {
     root.classList.add('titleSeg');
     const pm = MAN.title_portrait;
-    const pw = el('div', 'portrait'); const img = el('img'); img.src = '../assets/' + pm.file; pw.appendChild(img); root.appendChild(pw);
+    const pw = el('div', 'portrait'); const img = el('img'); img.src = ASSET() + pm.file; pw.appendChild(img); root.appendChild(pw);
     root.appendChild(el('div', 'shade'));
     let calli;
-    if (MAN.calli_txwg) { calli = el('div', 'calli'); const ci = el('img'); ci.src = '../assets/' + MAN.calli_txwg.file; calli.appendChild(ci); }
+    if (MAN.calli_txwg) { calli = el('div', 'calli'); const ci = el('img'); ci.src = ASSET() + MAN.calli_txwg.file; calli.appendChild(ci); }
     else calli = el('div', 'bigtitle', '天下为公');
     root.appendChild(calli);
     const rule = root.appendChild(el('div', 'rule'));
@@ -319,7 +358,7 @@ function buildSegment(seg) {
     root.appendChild(el('div', 'glow'));
     const c = root.appendChild(el('div', 'center'));
     let calli;
-    if (MAN.calli_txwg) { calli = el('div', 'calli'); const ci = el('img'); ci.src = '../assets/' + MAN.calli_txwg.file; calli.appendChild(ci); }
+    if (MAN.calli_txwg) { calli = el('div', 'calli'); const ci = el('img'); ci.src = ASSET() + MAN.calli_txwg.file; calli.appendChild(ci); }
     else calli = el('div', 'bigtitle', '天下为公');
     c.appendChild(calli);
     const name = c.appendChild(el('div', 'name', '孙中山先生'));
@@ -337,7 +376,7 @@ function buildSegment(seg) {
 }
 
 /* ------------------------------------------------------------------- init */
-window.init = async function (tl, man, maps, range) {
+window.init = async function (tl, man, maps, range, opts = {}) {
   TL = tl; MAN = man; MAPS = maps || {}; XF = tl.xfade;
   const [ra, rb] = range || [0, tl.duration];
   ctxA = $('#cvA').getContext('2d', { alpha: false }); ctxB = $('#cvB').getContext('2d', { alpha: false });
@@ -359,12 +398,12 @@ window.init = async function (tl, man, maps, range) {
     if (s.img) { const m = MAN[s.img]; if (!m) throw new Error('unknown image ' + s.img); const fit = fitOf(s); if (fit !== 'bg') need.add(m.file); if (fit !== 'cover') need.add(m.bg); }
     buildOverlay(s);
   });
-  await Promise.all([...need].map(loadBitmap));
+  if (!opts.lazy) await Promise.all([...need].map(loadBitmap));
   for (const seg of TL.segments) {
     if (seg.t1 + 1 < ra || seg.t0 - 1 > rb) continue;
     buildSegment(seg);
   }
-  await Promise.all([...document.images].map(im => im.decode ? im.decode().catch(() => 0) : 0));
+  if (!opts.lazy) await Promise.all([...document.images].map(im => im.decode ? im.decode().catch(() => 0) : 0));
   return { shots: TL.shots.filter(s => s._live).length, images: need.size };
 };
 

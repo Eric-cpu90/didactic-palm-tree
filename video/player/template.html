@@ -1,0 +1,429 @@
+<title>天下为公</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="纪念孙中山先生诞辰一百六十周年的纪录短片，十分钟，中文旁白。">
+<link rel="stylesheet" href="web/style.css">
+<style>
+/* Layout: one centred column read like a cinema programme: title, screen, table of contents, then the script and sources. */
+:root {
+  --bg: #0f0e0c;          /* ink */
+  --bg-raised: #191713;
+  --rule: #34302a;
+  --fg: #ece4d2;          /* paper */
+  --muted: #a39a89;
+  --accent: #c9a567;      /* gilt, as on the mausoleum gate */
+  --seal: #a8322a;        /* seal-paste red, used once */
+  --f-song: "Song", "Noto Serif SC", "Songti SC", "STSong", serif;
+  --f-hei: "Hei", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --f-num: "Garamond", "Cormorant Garamond", Georgia, serif;
+  --step--1: .8125rem; --step-0: 1rem; --step-1: 1.1875rem; --step-2: 1.5rem;
+  color-scheme: dark;
+}
+html { background: var(--bg); }
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--f-hei); font-size: var(--step-0); line-height: 1.7;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 4rem;
+}
+.wrap { max-width: 1180px; margin: 0 auto; display: grid; gap: 2.75rem; }
+a { color: var(--accent); text-underline-offset: 3px; }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* ---------- masthead ---------- */
+.mast { display: grid; gap: .9rem; padding-top: 2.5rem; }
+.eyebrow { font-size: var(--step--1); letter-spacing: .32em; color: var(--accent); }
+.mast h1 { margin: 0; line-height: 0; }
+.mast h1 img { height: clamp(64px, 11vw, 128px); width: auto; max-width: 100%; }
+.facts { display: flex; flex-wrap: wrap; gap: .4rem 1.4rem; color: var(--muted); font-size: var(--step--1); letter-spacing: .08em; }
+.facts .num { font-family: var(--f-num); font-size: 1.05rem; letter-spacing: .04em; color: var(--fg); }
+
+/* ---------- player ---------- */
+.player { display: grid; gap: .75rem; }
+.screen { position: relative; width: 100%; max-width: 100%; aspect-ratio: 16 / 9; background: #000; overflow: hidden; cursor: pointer; }
+.screen > #stage { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+.poster { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.bigplay {
+  position: absolute; left: 8.2%; bottom: 8%; display: flex; align-items: center; gap: .8rem;
+  padding: .7rem 1.3rem .7rem 1rem; background: rgba(15, 14, 12, .72); border: 1px solid rgba(201, 165, 103, .55); border-radius: 2px;
+  cursor: pointer; backdrop-filter: blur(4px);
+}
+.bigplay .ic { width: 30px; height: 30px; fill: var(--fg); }
+.bigplay .lbl { font-size: var(--step-1); letter-spacing: .3em; text-indent: .3em; }
+.bigplay .sub { font-size: var(--step--1); color: var(--muted); letter-spacing: .12em; font-variant-numeric: tabular-nums; }
+.bigplay:hover { border-color: var(--accent); }
+
+.controls { display: flex; align-items: center; gap: .5rem 1rem; flex-wrap: wrap; }
+.btn { display: inline-grid; place-items: center; width: 40px; height: 40px; background: none; border: 1px solid transparent; border-radius: 2px; cursor: pointer; }
+.btn svg { width: 22px; height: 22px; fill: var(--fg); }
+.btn:hover { border-color: var(--rule); }
+.btn[aria-pressed="false"] svg { fill: var(--muted); }
+.time { font-family: var(--f-num); font-size: 1.15rem; font-variant-numeric: tabular-nums lining-nums; letter-spacing: .03em; min-width: 7.5em; }
+.time .tot { color: var(--muted); }
+.now { color: var(--muted); font-size: var(--step--1); letter-spacing: .14em; white-space: nowrap; }
+.now b { color: var(--accent); font-weight: 500; margin-right: .5em; }
+.grow { flex: 1 1 auto; }
+
+.seek { position: relative; flex: 1 1 100%; height: 26px; order: -1; }
+.seek .track { position: absolute; left: 0; right: 0; top: 11px; height: 4px; background: var(--rule); }
+.seek .fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: var(--accent); }
+.seek .cut { position: absolute; top: -2px; bottom: -2px; width: 2px; margin-left: -1px; background: var(--bg); }
+.seek .knob { position: absolute; top: 5px; width: 16px; height: 16px; margin-left: -8px; border-radius: 50%; background: var(--fg); left: 0; }
+.seek input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.seek:focus-within .knob { outline: 2px solid var(--accent); outline-offset: 2px; }
+.loadmsg { color: var(--muted); font-size: var(--step--1); letter-spacing: .08em; }
+.loadmsg.err { color: #e0a38d; }
+
+.player:fullscreen { display: flex; flex-direction: column; gap: 0; background: #000; padding: 0 1rem .5rem; }
+.player:fullscreen .screen { flex: 1 1 auto; aspect-ratio: auto; }
+.player:fullscreen .controls { padding-top: .5rem; }
+
+.subs-off #subs { visibility: hidden; }
+
+/* ---------- table of contents ---------- */
+section h2 { font-family: var(--f-song); font-weight: 700; font-size: var(--step-2); letter-spacing: .3em; margin: 0 0 1rem; text-wrap: balance; }
+.toc { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 330px), 1fr)); column-gap: 3rem; }
+.toc button {
+  width: 100%; display: grid; grid-template-columns: 4.2em auto 1fr auto; align-items: baseline; gap: .8rem;
+  padding: .7rem 0; background: none; border: 0; border-bottom: 1px solid var(--rule); cursor: pointer; text-align: left;
+}
+.toc .no { color: var(--accent); font-size: var(--step--1); letter-spacing: .2em; }
+.toc .name { font-family: var(--f-song); font-weight: 600; font-size: var(--step-1); letter-spacing: .14em; white-space: nowrap; }
+.toc .yr { font-family: var(--f-num); color: var(--muted); font-size: .95rem; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.toc time { font-family: var(--f-num); font-size: 1.05rem; font-variant-numeric: tabular-nums lining-nums; min-width: 2.6em; text-align: right; }
+.toc button:hover .name { color: var(--accent); }
+.toc button[aria-current="true"] .name { color: var(--accent); }
+.toc button[aria-current="true"] { border-bottom-color: var(--accent); }
+
+/* ---------- script & sources ---------- */
+details { border-top: 1px solid var(--rule); padding-top: .9rem; }
+details > summary { cursor: pointer; font-family: var(--f-song); font-weight: 700; font-size: var(--step-1); letter-spacing: .24em; list-style: none; display: flex; justify-content: space-between; gap: 1rem; }
+details > summary::-webkit-details-marker { display: none; }
+details > summary::after { content: "展开"; font-family: var(--f-hei); font-weight: 400; font-size: var(--step--1); color: var(--muted); letter-spacing: .14em; }
+details[open] > summary::after { content: "收起"; }
+.script { max-width: 40em; font-family: var(--f-song); font-size: 1.0625rem; line-height: 2; }
+.script h3 { font-size: var(--step--1); font-family: var(--f-hei); font-weight: 500; color: var(--accent); letter-spacing: .26em; margin: 2rem 0 .4rem; }
+.script p { margin: 0 0 .9rem; }
+.script .s { cursor: pointer; border-radius: 2px; }
+.script .s:hover { background: var(--bg-raised); color: var(--accent); }
+.about { max-width: 40em; color: var(--muted); }
+.about p { margin: 0 0 .8rem; }
+.tablewrap { overflow-x: auto; margin-top: 1rem; }
+table { border-collapse: collapse; width: 100%; font-size: var(--step--1); min-width: 640px; }
+th, td { text-align: left; padding: .5rem .8rem .5rem 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th { color: var(--muted); font-weight: 500; letter-spacing: .12em; }
+td.t { font-family: var(--f-num); font-size: .95rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+td.lic { white-space: nowrap; }
+.stamp { display: inline-grid; place-items: center; width: 1.6em; height: 1.6em; background: var(--seal); color: var(--fg); font-family: var(--f-song); font-size: .75rem; border-radius: 2px; margin-right: .6em; vertical-align: .1em; }
+footer { color: var(--muted); font-size: var(--step--1); letter-spacing: .1em; }
+
+@media (max-width: 560px) {
+  .wrap { gap: 2rem; }
+  .now { display: none; }
+  .bigplay { left: 4%; bottom: 6%; padding: .35rem .8rem .35rem .5rem; gap: .5rem; }
+  .bigplay .ic { width: 22px; height: 22px; }
+  .bigplay .lbl { font-size: var(--step-0); }
+  .bigplay .sub { display: none; }
+  .time { min-width: 0; }
+  .controls { gap: .25rem .4rem; }
+  .toc button { grid-template-columns: 3.8em 1fr auto; }
+  .toc .yr { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+
+<div class="wrap">
+  <header class="mast">
+    <div class="eyebrow">纪念孙中山先生诞辰一百六十周年</div>
+    <h1><img src="assets/{{CALLI}}" alt="天下为公" width="{{CALLI_W}}" height="{{CALLI_H}}"></h1>
+    <div class="facts"><span>纪录短片</span><span><span class="num">{{DUR_TEXT}}</span></span><span>中文旁白 · 中文字幕</span><span><span class="num">1866 — 1925</span></span></div>
+  </header>
+
+  <section class="player" id="player" aria-label="影片播放器">
+    <div class="screen" id="screen">
+      <img class="poster" id="poster" src="poster.jpg" alt="片头：孙中山先生肖像与手书“天下为公”">
+      <div id="stage" hidden>
+        <canvas id="cvA" width="1920" height="1080"></canvas>
+        <canvas id="cvB" width="1920" height="1080"></canvas>
+        <div id="overlays"></div>
+        <div id="vignette"></div>
+        <div id="scrimTop"></div>
+        <div id="scrimBottom"></div>
+        <div id="hud">
+          <div id="chapterTag"><span class="bar"></span><span class="no"></span><span class="ttl"></span></div>
+          <div id="yearBox"><div id="year"></div></div>
+          <div id="caption"></div>
+        </div>
+        <div id="subs"><span></span></div>
+        <div id="segments"></div>
+        <div id="grain"></div>
+        <div id="blackout"></div>
+      </div>
+      <button class="bigplay" id="bigplay" type="button" aria-label="播放影片">
+        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l12.5-7.5z"/></svg>
+        <span class="lbl">播放</span>
+        <span class="sub" id="bigsub">{{DUR_TEXT}}</span>
+      </button>
+    </div>
+    <div class="controls">
+      <div class="seek">
+        <div class="track"><div class="fill" id="fill"></div>{{CUTS}}</div>
+        <div class="knob" id="knob"></div>
+        <input id="seekin" type="range" min="0" max="{{DUR}}" step="0.1" value="0" aria-label="播放进度">
+      </div>
+      <button class="btn" id="playbtn" type="button" aria-label="播放">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path id="playicon" d="M7 4.5v15l12.5-7.5z"/></svg>
+      </button>
+      <div class="time"><span id="tcur">0:00</span> <span class="tot">/ {{DUR_CLOCK}}</span></div>
+      <div class="now" id="now"><b>开篇</b>题词</div>
+      <span class="grow"></span>
+      <span class="loadmsg" id="loadmsg" role="status">音轨载入中</span>
+      <button class="btn" id="subbtn" type="button" aria-pressed="true" aria-label="字幕" title="字幕（C）">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18v14H3zM5 7v10h14V7zm1.5 6.5h5V15h-5zm7 0h4V15h-4zm-7-3h3V12h-3zm5 0h6V12h-6z"/></svg>
+      </button>
+      <button class="btn" id="mutebtn" type="button" aria-pressed="true" aria-label="声音" title="声音（M）">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path id="muteicon" d="M4 9h4l5-4v14l-5-4H4zm12.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4zM14 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z"/></svg>
+      </button>
+      <button class="btn" id="fsbtn" type="button" aria-label="全屏" title="全屏（F）">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h6v2H6v4H4zm10 0h6v6h-2V6h-4zM4 14h2v4h4v2H4zm14 0h2v6h-6v-2h4z"/></svg>
+      </button>
+    </div>
+    <audio id="audio" preload="none"></audio>
+  </section>
+
+  <section aria-labelledby="toc-h">
+    <h2 id="toc-h">目 录</h2>
+    <ol class="toc" id="toc">
+{{TOC}}
+    </ol>
+  </section>
+
+  <section>
+    <details>
+      <summary>解说词全文</summary>
+      <div class="script">
+{{SCRIPT}}
+      </div>
+    </details>
+  </section>
+
+  <section class="about-sec">
+    <details>
+      <summary>图片来源与许可</summary>
+      <div class="about">
+        <p>片中 {{N_IMG}} 张图片均来自维基共享资源（Wikimedia Commons）：{{N_PD}} 张为公有领域或 CC0 的历史照片与文献，{{N_CC}} 张今日纪念地照片依知识共享许可使用。所有图片都经过裁切与统一调色。</p>
+        <p>旁白为离线语音合成（Kokoro v1.1-zh），配乐为本片原创；字体为思源宋体、思源黑体、马善政毛笔楷书与 Cormorant Garamond。</p>
+      </div>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>出现</th><th>文件</th><th>作者</th><th>许可</th></tr></thead>
+          <tbody>
+{{CREDITS}}
+          </tbody>
+        </table>
+      </div>
+    </details>
+  </section>
+
+  <footer><span class="stamp">纪</span>二〇二六年十一月 · 空格键播放或暂停，方向键前后跳五秒，点击目录或解说词中的句子可跳转。</footer>
+</div>
+
+<script src="web/engine.js"></script>
+<script>
+(() => {
+  'use strict';
+  window.STAGE_ASSETS = 'assets/';
+  const q = s => document.querySelector(s);
+  const screen = q('#screen'), stage = q('#stage'), poster = q('#poster'), audio = q('#audio');
+  const seekin = q('#seekin'), fill = q('#fill'), knob = q('#knob'), tcur = q('#tcur'), now = q('#now');
+  const bigplay = q('#bigplay'), playbtn = q('#playbtn'), playicon = q('#playicon'), loadmsg = q('#loadmsg');
+  const subbtn = q('#subbtn'), mutebtn = q('#mutebtn'), muteicon = q('#muteicon'), fsbtn = q('#fsbtn');
+  const tocBtns = [...document.querySelectorAll('#toc button')];
+  const PLAY = 'M7 4.5v15l12.5-7.5z', PAUSE = 'M6.5 4.5h4v15h-4zm7 0h4v15h-4z';
+  const VOL = muteicon.getAttribute('d'), MUTED = 'M4 9h4l5-4v14l-5-4H4zm11.6.2 1.4-1.4 2.2 2.2 2.2-2.2 1.4 1.4-2.2 2.2 2.2 2.2-1.4 1.4-2.2-2.2-2.2 2.2-1.4-1.4 2.2-2.2z';
+  const POSTER_T = 15.0;
+
+  let TL = null, DUR = +seekin.max, ready = false, audioReady = false, wantPlay = false, playing = false;
+  let cur = 0, lastDrawn = -1, lastPrep = -99, res = 0, started = false;
+
+  const fmt = t => { t = Math.max(0, Math.floor(t)); return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0'); };
+
+  /* ----- stage scaling ----- */
+  function fit() {
+    const w = screen.clientWidth, h = screen.clientHeight;
+    if (!w || !h) return;
+    const sc = Math.min(w / 1920, h / 1080);
+    stage.style.transform = `translate(${(w - 1920 * sc) / 2}px, ${(h - 1080 * sc) / 2}px) scale(${sc})`;
+    if (!ready) return;
+    const want = Math.min(1, Math.ceil(sc * (window.devicePixelRatio || 1) * 8) / 8);
+    if (want !== res) { res = want; window.setResolution(res); draw(cur, true); }
+  }
+  new ResizeObserver(fit).observe(screen);
+
+  /* ----- image preparation around the playhead ----- */
+  let prepRunning = null, prepNext = null;
+  function prep(t) {
+    prepNext = t;
+    if (prepRunning) return prepRunning;
+    prepRunning = (async () => {
+      while (prepNext !== null) { const x = prepNext; prepNext = null; await window.prepare(x); }
+      prepRunning = null;
+    })();
+    return prepRunning;
+  }
+
+  /* ----- drawing and UI state ----- */
+  function chapterAt(t) {
+    let c = TL.chapters[0];
+    for (const x of TL.chapters) if (t >= x.t0) c = x;
+    return c;
+  }
+  function draw(t, force) {
+    if (!ready) return;
+    if (!force && Math.abs(t - lastDrawn) < 1 / 90) return;
+    window.renderAt(Math.min(t, DUR - 0.001));
+    lastDrawn = t;
+    ui(t);
+  }
+  let lastCh = null;
+  function ui(t) {
+    const p = Math.min(1, t / DUR) * 100;
+    fill.style.width = p + '%'; knob.style.left = p + '%';
+    if (document.activeElement !== seekin) seekin.value = t.toFixed(1);
+    seekin.setAttribute('aria-valuetext', fmt(t));
+    tcur.textContent = fmt(t);
+    let id = null;
+    for (const b of tocBtns) if (t + 0.05 >= +b.dataset.t) id = b.dataset.id;
+    if (id !== lastCh) {
+      lastCh = id;
+      tocBtns.forEach(b => b.setAttribute('aria-current', b.dataset.id === id ? 'true' : 'false'));
+      const b = tocBtns.find(b => b.dataset.id === id);
+      if (b) now.innerHTML = `<b>${b.querySelector('.no').textContent}</b>${b.querySelector('.name').textContent}`;
+    }
+  }
+  function setPlayingUI() {
+    playicon.setAttribute('d', playing ? PAUSE : PLAY);
+    playbtn.setAttribute('aria-label', playing ? '暂停' : '播放');
+    bigplay.hidden = playing || (started && cur > 0.5 && cur < DUR - 0.5);
+    bigplay.querySelector('.lbl').textContent = cur >= DUR - 0.5 ? '重播' : '播放';
+  }
+
+  /* ----- playback ----- */
+  function loop() {
+    if (playing) {
+      cur = audio.currentTime;
+      draw(cur);
+      if (cur - lastPrep > 2 || cur < lastPrep) { lastPrep = cur; prep(cur); }
+    }
+    requestAnimationFrame(loop);
+  }
+  async function play() {
+    if (!audioReady) { wantPlay = true; loadmsg.textContent = '音轨载入中，载入后自动播放'; return; }
+    if (cur >= DUR - 0.5) seek(0);
+    started = true;
+    try { await audio.play(); } catch (e) { wantPlay = false; setPlayingUI(); }
+  }
+  function pause() { wantPlay = false; audio.pause(); }
+  function toggle() { (playing || wantPlay) ? pause() : play(); }
+  audio.addEventListener('play', () => { playing = true; wantPlay = false; setPlayingUI(); });
+  audio.addEventListener('pause', () => { playing = false; cur = audio.currentTime; setPlayingUI(); draw(cur, true); });
+  audio.addEventListener('ended', () => { playing = false; cur = DUR; setPlayingUI(); draw(DUR, true); });
+
+  async function seek(t) {
+    cur = Math.max(0, Math.min(DUR, t));
+    if (audioReady) audio.currentTime = cur;
+    if (cur > 0.5) started = true;
+    draw(cur, true);
+    setPlayingUI();
+    await prep(cur);
+    if (Math.abs(lastDrawn - cur) < 0.6 || !playing) draw(playing ? audio.currentTime : cur, true);
+  }
+
+  /* ----- controls ----- */
+  bigplay.addEventListener('click', e => { e.stopPropagation(); play(); });
+  screen.addEventListener('click', () => toggle());
+  playbtn.addEventListener('click', toggle);
+  seekin.addEventListener('input', () => seek(+seekin.value));
+  tocBtns.forEach(b => b.addEventListener('click', () => { seek(+b.dataset.t + 0.01); screen.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }));
+  document.querySelectorAll('.script .s').forEach(s => s.addEventListener('click', () => {
+    seek(+s.dataset.t - 0.3); screen.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }));
+  subbtn.addEventListener('click', () => {
+    const on = subbtn.getAttribute('aria-pressed') !== 'true';
+    subbtn.setAttribute('aria-pressed', on); stage.classList.toggle('subs-off', !on);
+  });
+  mutebtn.addEventListener('click', () => {
+    audio.muted = !audio.muted;
+    mutebtn.setAttribute('aria-pressed', !audio.muted); muteicon.setAttribute('d', audio.muted ? MUTED : VOL);
+  });
+  fsbtn.addEventListener('click', async () => {
+    const pl = q('#player');
+    try { document.fullscreenElement ? await document.exitFullscreen() : await pl.requestFullscreen(); }
+    catch (e) { fsbtn.title = '此处不支持全屏'; }
+  });
+  document.addEventListener('keydown', e => {
+    if (e.target.closest('input, textarea') && e.key !== ' ') return;
+    if (e.key === ' ' || e.key === 'k') { if (e.target.closest('button, summary') && e.key === ' ') return; e.preventDefault(); toggle(); }
+    else if (e.key === 'ArrowRight' && e.target !== seekin) { e.preventDefault(); seek(cur + 5); }
+    else if (e.key === 'ArrowLeft' && e.target !== seekin) { e.preventDefault(); seek(cur - 5); }
+    else if (e.key === 'f') fsbtn.click();
+    else if (e.key === 'c') subbtn.click();
+    else if (e.key === 'm') mutebtn.click();
+  });
+
+  /* ----- loading ----- */
+  async function loadAudio() {
+    try {
+      const r = await fetch('audio/film.mp4');
+      if (!r.ok) throw new Error(r.status);
+      const total = +r.headers.get('content-length') || 0;
+      const reader = r.body.getReader(), parts = [];
+      let got = 0;
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        parts.push(value); got += value.length;
+        if (total) loadmsg.textContent = (wantPlay ? '音轨载入中，载入后自动播放 ' : '音轨载入中 ') + Math.round(got / total * 100) + '%';
+      }
+      audio.src = URL.createObjectURL(new Blob(parts, { type: 'audio/mp4' }));
+      audio.preload = 'auto';
+      await new Promise((ok, bad) => { audio.addEventListener('loadedmetadata', ok, { once: true }); audio.addEventListener('error', bad, { once: true }); audio.load(); });
+      audioReady = true;
+      audio.currentTime = cur;
+      loadmsg.textContent = '';
+      if (wantPlay) play();
+    } catch (e) {
+      loadmsg.textContent = '音轨载入失败，请刷新页面重试';
+      loadmsg.classList.add('err');
+    }
+  }
+
+  async function boot() {
+    loadAudio();
+    try {
+      const [tl, man, maps] = await Promise.all(['data/timeline.json', 'assets/manifest.json', 'assets/maps.json']
+        .map(u => fetch(u).then(r => { if (!r.ok) throw new Error(u); return r.json(); })));
+      TL = tl; DUR = tl.duration;
+      await window.init(tl, man, maps, null, { lazy: true });
+      const hash = location.hash.slice(1);
+      const start = tocBtns.find(b => b.dataset.id === hash);
+      cur = start ? +start.dataset.t + 0.01 : 0;
+      await window.prepare(start ? cur : POSTER_T);
+      ready = true;
+      stage.hidden = false;
+      fit();
+      window.renderAt(start ? cur : POSTER_T);       // poster frame: the title card
+      lastDrawn = -1;
+      ui(cur);
+      poster.hidden = true;
+      if (start) started = true;
+      setPlayingUI();
+      requestAnimationFrame(loop);
+    } catch (e) {
+      loadmsg.textContent = '画面载入失败，请刷新页面重试';
+      loadmsg.classList.add('err');
+    }
+  }
+  boot();
+})();
+</script>
