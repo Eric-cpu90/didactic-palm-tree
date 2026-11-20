@@ -16,6 +16,7 @@
 | `images.json` | 用到的图片及调色方式 |
 | `credits.html` / `CREDITS.md` | 片尾字幕 / 全部图片的作者、许可与出处 |
 | `web/` | 画面引擎（HTML/Canvas，逐帧确定性渲染）、样式与子集化字体 |
+| `player/template.html` | 网页播放器模板：同一套引擎在浏览器里实时播放，附目录、解说词与署名 |
 | `assets/` | 处理后的图片、地图点阵（由 `tools/images.py`、`tools/maps.py` 生成） |
 | `tools/` | 流水线脚本 |
 
@@ -32,6 +33,9 @@ python3 tools/mix.py                       # 4. 混音（旁白处自动压低�
 python3 tools/preview.py                   # （可选）每个镜头一张预览图 → build/sheets/
 node tools/render.js --from 0 --to 152.4 --out build/parts/p0.mp4   # 5. 逐帧渲染（可分段并行）
 tools/assemble.sh                          # 6. 拼接、封装 → output/
+python3 tools/player.py <字体目录>          # （可选）网页播放器 → build/web/（图片缩至 1920 px、音轨 AAC 128k）
 ```
+
+网页播放器按播放进度只解码前后一段时间内的图片，手机上也能流畅播放；画面与导出的视频文件逐帧一致。
 
 素材准备（一次性）：`tools/images.py <下载目录>` 处理图片；`tools/maps.py <world-atlas 目录>` 生成地图点阵；`tools/fonts.py <字体目录>` 子集化字体；`tools/credits.py` 生成署名清单与 SRT 字幕。
