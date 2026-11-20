@@ -1,4 +1,5 @@
 build/
 models/
+output/
 node_modules/
 __pycache__/

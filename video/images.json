@@ -121,9 +121,6 @@
  "gz_hall": {
   "tone": "color"
  },
- "taipei_hall": {
-  "tone": "color"
- },
  "sg_hall": {
   "tone": "color"
  },
@@ -132,6 +129,9 @@
  },
  "portrait_main": {},
  "ml_lookdown": {
+  "tone": "color"
+ },
+ "taipei_hall2": {
   "tone": "color"
  }
 }
