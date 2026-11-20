@@ -11,7 +11,7 @@
   --gold-dim: rgba(201, 165, 103, .65);
   --seal: #a8322a;
 }
-#stage, #stage * { margin: 0; padding: 0; box-sizing: border-box; }
+:where(#stage, #stage *) { margin: 0; padding: 0; box-sizing: border-box; }
 #stage {
   position: relative; width: 1920px; height: 1080px; overflow: hidden; background: var(--ink);
   font-family: "Song", serif; color: var(--paper);
